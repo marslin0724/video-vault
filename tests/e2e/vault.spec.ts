@@ -117,6 +117,15 @@ test('upload, stream, download, export/import, dedup, delete', async ({ page }) 
   expect(saved.length).toBe(sample1.length);
   expect(sha256(saved)).toBe(sha256(sample1));
 
+  // --- reload: the storage session is remembered, only the passphrase is asked, and we land back on the same page ---
+  const watchUrl = page.url();
+  await page.reload();
+  await expect(page.getByRole('heading', { name: '解鎖 vault' })).toBeVisible({ timeout: 15_000 });
+  await page.getByPlaceholder(/^passphrase/).fill(PASS);
+  await page.getByRole('button', { name: '解鎖', exact: true }).click();
+  await expect(page).toHaveURL(watchUrl, { timeout: 15_000 });
+  await expectPlaying(page);
+
   // --- dedup: uploading the same file again stores nothing new ---
   await page.goto('/#/');
   const log2 = await upload(page, SAMPLE1);

@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { ref } from 'vue';
-import { useRouter } from 'vue-router';
+import { onMounted, ref } from 'vue';
+import { useRoute, useRouter } from 'vue-router';
 import { useSession } from '../stores/session';
 import { LocalFolderProvider } from '../core/storage/local';
 import { OpfsProvider } from '../core/storage/opfs';
@@ -9,7 +9,9 @@ import Icon from './Icon.vue';
 
 const s = useSession();
 const router = useRouter();
-const step = ref<'pick' | 'passphrase'>('pick');
+const route = useRoute();
+const step = ref<'resume' | 'pick' | 'passphrase'>('resume');
+const stored = s.storedSession();
 const creating = ref(false);
 const pass = ref('');
 const pass2 = ref('');
@@ -22,6 +24,43 @@ const isDev = import.meta.env.DEV;
 const opfsSupported = OpfsProvider.isSupported();
 const opfsInfo = ref('');
 if (opfsSupported) void OpfsProvider.estimate().then((e) => e && (opfsInfo.value = `已用 ${formatBytes(e.usage)} / 可用約 ${formatBytes(e.quota)}`));
+
+async function afterConnect() {
+  creating.value = !(await s.hasVault());
+  step.value = 'passphrase';
+}
+
+/** Silent reconnect from the stored session; otherwise fall through to the picker with a continue button. */
+onMounted(async () => {
+  if (!stored) return (step.value = 'pick');
+  busy.value = true;
+  try {
+    if (await s.resume()) await afterConnect();
+    else step.value = 'pick';
+  } catch (e) {
+    error.value = (e as Error).message;
+    step.value = 'pick';
+  } finally {
+    busy.value = false;
+  }
+});
+
+/** One-click continuation when the stored session needs a user gesture (expired token, folder permission). */
+async function continueStored() {
+  if (!stored) return;
+  error.value = '';
+  busy.value = true;
+  try {
+    if (stored.kind === 'gdrive') await s.connectGoogle({ hint: stored.user });
+    else if (stored.kind === 'local') await s.resumeLocalWithPrompt();
+    else await s.connectOpfs(stored.name);
+    await afterConnect();
+  } catch (e) {
+    error.value = (e as Error).message;
+  } finally {
+    busy.value = false;
+  }
+}
 
 async function connect(kind: 'gdrive' | 'local' | 'opfs') {
   error.value = '';
@@ -38,8 +77,7 @@ async function connect(kind: 'gdrive' | 'local' | 'opfs') {
     } else {
       await s.connectLocal();
     }
-    creating.value = !(await s.hasVault());
-    step.value = 'passphrase';
+    await afterConnect();
   } catch (e) {
     error.value = (e as Error).message;
   } finally {
@@ -54,7 +92,7 @@ async function submit() {
   busy.value = true;
   try {
     await s.unlock(pass.value, creating.value);
-    router.push('/');
+    router.push(typeof route.query.redirect === 'string' ? route.query.redirect : '/');
   } catch (e) {
     error.value = creating.value ? (e as Error).message : 'passphrase 錯誤或 vault 損毀';
   } finally {
@@ -71,7 +109,18 @@ async function submit() {
         <p class="muted">影片切塊、加密後存在你自己的儲存空間，瀏覽器直接串流播放。</p>
       </div>
 
+      <p class="muted" v-if="step === 'resume'">重新連線中…</p>
+
       <template v-if="step === 'pick'">
+        <button v-if="stored" class="provider" :disabled="busy" @click="continueStored">
+          <Icon :name="stored.kind === 'gdrive' ? 'drive' : 'folder'" :size="26" />
+          <span>
+            <div class="name">繼續上次的儲存空間</div>
+            <div class="desc" v-if="stored.kind === 'gdrive'">Google 授權已過期，以 {{ stored.user }} 重新連線</div>
+            <div class="desc" v-else-if="stored.kind === 'local'">需要再次允許存取上次選的資料夾</div>
+            <div class="desc" v-else>瀏覽器內儲存</div>
+          </span>
+        </button>
         <label class="field">
           <span>Google OAuth Client ID（設定方式見 README）</span>
           <input class="input" type="text" v-model="clientId" placeholder="xxxx.apps.googleusercontent.com" spellcheck="false" />

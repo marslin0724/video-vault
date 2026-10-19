@@ -11,6 +11,24 @@ import type { SwSession } from '../sw/protocol';
 
 type Provider = GoogleDriveProvider | LocalFolderProvider | OpfsProvider;
 const CLIENT_ID_KEY = 'vv.googleClientId';
+const SESSION_KEY = 'vv.session';
+
+/** What survives a reload. The master key never does; the passphrase is asked again. */
+export type StoredSession =
+  | { kind: 'gdrive'; token: string; expiresAt: number; user: string }
+  | { kind: 'opfs'; name: string }
+  | { kind: 'local' };
+
+function loadStored(): StoredSession | null {
+  try {
+    return JSON.parse(localStorage.getItem(SESSION_KEY) ?? 'null');
+  } catch {
+    return null;
+  }
+}
+function store(sess: StoredSession | null) {
+  sess ? localStorage.setItem(SESSION_KEY, JSON.stringify(sess)) : localStorage.removeItem(SESSION_KEY);
+}
 
 export const useSession = defineStore('session', () => {
   const provider = shallowRef<Provider | null>(null);
@@ -34,18 +52,63 @@ export const useSession = defineStore('session', () => {
     localStorage.setItem(CLIENT_ID_KEY, id.trim());
   }
 
-  async function connectGoogle(): Promise<Provider> {
+  async function connectGoogle(opts: { hint?: string } = {}): Promise<Provider> {
     const id = googleClientId();
     if (!id) throw new Error('Google Client ID is not set');
     const p = new GoogleDriveProvider(GoogleDriveProvider.tokenRequester(id));
-    await p.connect();
+    await p.connect(opts);
     provider.value = markRaw(p);
+    store({ kind: 'gdrive', token: p.accessToken, expiresAt: p.expiresAt, user: p.user });
     return p;
   }
 
   async function connectLocal(): Promise<Provider> {
     const p = await LocalFolderProvider.pick();
     provider.value = markRaw(p);
+    store({ kind: 'local' });
+    return p;
+  }
+
+  /** The session saved by the last connect, if any. */
+  function storedSession(): StoredSession | null {
+    return loadStored();
+  }
+
+  /**
+   * Reconnect the provider from the stored session without user interaction.
+   * Returns null when that is impossible (expired token, folder permission needed) so the login
+   * page can offer a one-click continuation instead.
+   */
+  async function resume(): Promise<Provider | null> {
+    const st = loadStored();
+    if (!st) return null;
+    if (st.kind === 'opfs') return connectOpfs(st.name);
+    if (st.kind === 'gdrive') {
+      if (st.expiresAt - 60_000 < Date.now()) return null;
+      const p = new GoogleDriveProvider(GoogleDriveProvider.tokenRequester(googleClientId()));
+      try {
+        await p.connect({ resume: { token: st.token, expiresAt: st.expiresAt } });
+      } catch {
+        return null; // token revoked or similar: fall back to an explicit login
+      }
+      provider.value = markRaw(p);
+      store({ kind: 'gdrive', token: p.accessToken, expiresAt: p.expiresAt, user: p.user });
+      return p;
+    }
+    const handle = await LocalFolderProvider.remembered();
+    if (!handle || (await (handle as any).queryPermission({ mode: 'readwrite' })) !== 'granted') return null;
+    const p = new LocalFolderProvider(handle);
+    provider.value = markRaw(p);
+    return p;
+  }
+
+  /** Local folder whose permission must be re-granted with a click. */
+  async function resumeLocalWithPrompt(): Promise<Provider | null> {
+    const handle = await LocalFolderProvider.remembered();
+    if (!handle) return null;
+    const p = await LocalFolderProvider.reopen(handle);
+    provider.value = markRaw(p);
+    store({ kind: 'local' });
     return p;
   }
 
@@ -53,6 +116,7 @@ export const useSession = defineStore('session', () => {
   async function connectOpfs(name = 'default'): Promise<Provider> {
     const p = await OpfsProvider.open(name);
     provider.value = markRaw(p);
+    store({ kind: 'opfs', name });
     return p;
   }
 
@@ -105,11 +169,14 @@ export const useSession = defineStore('session', () => {
     vault.value = null;
     provider.value = null;
     videos.value = [];
+    store(null);
+    void LocalFolderProvider.forget();
     bindSwSession(() => null, async () => null);
   }
 
   return {
     provider, vault, videos, loading, providerLabel,
     googleClientId, setGoogleClientId, connectGoogle, connectLocal, connectOpfs, hasVault, unlock, refreshVideos, logout,
+    storedSession, resume, resumeLocalWithPrompt,
   };
 });

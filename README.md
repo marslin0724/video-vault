@@ -97,6 +97,13 @@ Google Drive 上以扁平檔名存放（檔名即路徑），本機資料夾則�
 - iPhone 拍攝的 HEVC 影片上傳後，在 Windows 或桌面版 Chrome 可能無法播放（編碼相容問題，remux 不重新壓縮所以無法解決）
 - 可播放的格式取決於瀏覽器：mp4（H.264/AAC）、webm。mov / mkv 內含 H.264/AAC 時經 remux 即可播。
 
+## 登入狀態與 passphrase
+- 儲存後端的連線狀態會記住（Google token 與到期時間、OPFS 名稱、本機資料夾 handle），重新整理或重開分頁後只需輸入 passphrase。
+- master key 只存在記憶體，不落地，所以每次重開都要輸入 passphrase，這是刻意的設計。
+- Google token 約一小時到期，到期後登入頁會出現「繼續上次的儲存空間」，一鍵以同帳號重新授權，不會再跳帳號選擇。
+- 本機資料夾受瀏覽器限制，重開後要再點一次允許存取。
+- 「登出」會清掉記住的連線狀態。
+
 ## 已知限制
 - passphrase 遺失即無法解密，沒有重設機制。
 - 多個分頁同時上傳會互相覆蓋 index（last-writer-wins）。

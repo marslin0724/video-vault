@@ -11,7 +11,25 @@ export class LocalFolderProvider implements StorageProvider {
 
   static async pick(): Promise<LocalFolderProvider> {
     const root = await (window as any).showDirectoryPicker({ mode: 'readwrite' });
+    await rememberHandle(root);
     return new LocalFolderProvider(root);
+  }
+
+  /** The folder picked last time, if the browser still has permission (or can ask for it on a click). */
+  static async remembered(): Promise<FileSystemDirectoryHandle | null> {
+    return loadHandle();
+  }
+
+  static async forget(): Promise<void> {
+    await rememberHandle(null);
+  }
+
+  static async reopen(handle: FileSystemDirectoryHandle): Promise<LocalFolderProvider> {
+    const h = handle as any;
+    if ((await h.queryPermission({ mode: 'readwrite' })) !== 'granted' && (await h.requestPermission({ mode: 'readwrite' })) !== 'granted') {
+      throw new Error('沒有資料夾存取權限');
+    }
+    return new LocalFolderProvider(handle);
   }
 
   private async dir(parts: string[], create: boolean): Promise<FileSystemDirectoryHandle> {
@@ -120,4 +138,37 @@ function writeViaSyncAccessHandle(dir: FileSystemDirectoryHandle, name: string, 
   // one write at a time: the worker handles a single message/response pair
   syncQueue = syncQueue.then(run, run);
   return syncQueue;
+}
+
+// Directory handles survive reloads only inside IndexedDB (structured clone), not localStorage.
+const DB = 'video-vault';
+const STORE = 'handles';
+function openDb(): Promise<IDBDatabase> {
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open(DB, 1);
+    req.onupgradeneeded = () => req.result.createObjectStore(STORE);
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+}
+async function rememberHandle(handle: FileSystemDirectoryHandle | null): Promise<void> {
+  const db = await openDb();
+  await new Promise<void>((resolve, reject) => {
+    const tx = db.transaction(STORE, 'readwrite');
+    handle ? tx.objectStore(STORE).put(handle, 'local') : tx.objectStore(STORE).delete('local');
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+  });
+}
+async function loadHandle(): Promise<FileSystemDirectoryHandle | null> {
+  try {
+    const db = await openDb();
+    return await new Promise((resolve, reject) => {
+      const req = db.transaction(STORE).objectStore(STORE).get('local');
+      req.onsuccess = () => resolve(req.result ?? null);
+      req.onerror = () => reject(req.error);
+    });
+  } catch {
+    return null;
+  }
 }

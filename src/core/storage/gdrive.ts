@@ -6,8 +6,12 @@ const UPLOAD = 'https://www.googleapis.com/upload/drive/v3';
 const SCOPE = 'https://www.googleapis.com/auth/drive.file';
 const FOLDER_MIME = 'application/vnd.google-apps.folder';
 
-/** `selectAccount` forces Google's account chooser (user-initiated login); omitted for silent token refresh. */
-export type TokenRequester = (opts?: { selectAccount?: boolean }) => Promise<string>;
+export interface TokenInfo {
+  token: string;
+  expiresAt: number; // epoch ms
+}
+/** `selectAccount` forces Google's account chooser; `hint` pre-selects an account for a silent refresh. */
+export type TokenRequester = (opts?: { selectAccount?: boolean; hint?: string }) => Promise<TokenInfo>;
 
 interface DriveFile {
   id: string;
@@ -24,6 +28,7 @@ export class GoogleDriveProvider implements StorageProvider {
   private ids = new Map<string, DriveFile>();
   private folderId = '';
   private token = '';
+  expiresAt = 0;
   /** Email of the signed-in Google account, filled by connect(). */
   user = '';
 
@@ -31,7 +36,7 @@ export class GoogleDriveProvider implements StorageProvider {
 
   /** Service-worker side: only needs a token to download by file id. */
   static fromToken(token: string): GoogleDriveProvider {
-    const p = new GoogleDriveProvider(async () => token);
+    const p = new GoogleDriveProvider(async () => ({ token, expiresAt: 0 }));
     p.token = token;
     return p;
   }
@@ -39,17 +44,19 @@ export class GoogleDriveProvider implements StorageProvider {
   /** Obtain an OAuth token through Google Identity Services (page side only). */
   static tokenRequester(clientId: string): TokenRequester {
     return (opts) =>
-      new Promise<string>((resolve, reject) => {
+      new Promise<TokenInfo>((resolve, reject) => {
         const g = (globalThis as any).google;
         if (!g?.accounts?.oauth2) return reject(new Error('Google Identity Services not loaded'));
         const client = g.accounts.oauth2.initTokenClient({
           client_id: clientId,
           scope: SCOPE,
-          callback: (resp: { access_token?: string; error?: string }) =>
-            resp.access_token ? resolve(resp.access_token) : reject(new Error(resp.error ?? 'auth failed')),
+          callback: (resp: { access_token?: string; expires_in?: number; error?: string }) =>
+            resp.access_token
+              ? resolve({ token: resp.access_token, expiresAt: Date.now() + (resp.expires_in ?? 3600) * 1000 })
+              : reject(new Error(resp.error ?? 'auth failed')),
           error_callback: (e: { type: string }) => reject(new Error(e.type)),
         });
-        client.requestAccessToken({ prompt: opts?.selectAccount ? 'select_account' : '' });
+        client.requestAccessToken({ prompt: opts?.selectAccount ? 'select_account' : '', hint: opts?.hint });
       });
   }
 
@@ -57,8 +64,17 @@ export class GoogleDriveProvider implements StorageProvider {
     return this.token;
   }
 
-  async connect(): Promise<void> {
-    this.token = await this.requestToken({ selectAccount: true });
+  /**
+   * Connect with a fresh token (account chooser), a stored one (`resume`), or a silent refresh for a
+   * known account (`hint`).
+   */
+  async connect(opts: { resume?: TokenInfo; hint?: string } = {}): Promise<void> {
+    if (opts.resume && opts.resume.expiresAt > Date.now()) {
+      this.token = opts.resume.token;
+      this.expiresAt = opts.resume.expiresAt;
+    } else {
+      await this.refreshToken(opts.hint ? { hint: opts.hint } : { selectAccount: true });
+    }
     const about = (await (await this.fetch(`${API}/about?fields=user(emailAddress)`)).json()) as { user?: { emailAddress?: string } };
     this.user = about.user?.emailAddress ?? '';
     this.folderId = await this.findOrCreateFolder();
@@ -70,11 +86,17 @@ export class GoogleDriveProvider implements StorageProvider {
     headers.set('Authorization', `Bearer ${this.token}`);
     const res = await fetch(url, { ...init, headers });
     if (res.status === 401 && retry) {
-      this.token = await this.requestToken();
+      await this.refreshToken({ hint: this.user || undefined });
       return this.fetch(url, init, false);
     }
     if (!res.ok) throw new Error(`Drive ${init.method ?? 'GET'} ${res.status}: ${await res.text()}`);
     return res;
+  }
+
+  private async refreshToken(opts: Parameters<TokenRequester>[0]): Promise<void> {
+    const t = await this.requestToken(opts);
+    this.token = t.token;
+    this.expiresAt = t.expiresAt;
   }
 
   private async findOrCreateFolder(): Promise<string> {
