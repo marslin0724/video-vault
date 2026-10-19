@@ -66,6 +66,54 @@ function downloadName(m: VideoMeta): string {
   return m.remuxed ? `${m.title}.mp4` : m.originalName;
 }
 
+const downloading = ref(0); // bytes written so far, 0 = idle
+
+/**
+ * Browser-initiated downloads (<a download>) bypass the service worker, so the page fetches the
+ * stream itself. Chrome/Edge stream straight to disk; other browsers fall back to a Blob.
+ */
+async function download() {
+  const m = meta.value!;
+  const name = downloadName(m);
+  const picker = (window as any).showSaveFilePicker as undefined | ((o: object) => Promise<FileSystemFileHandle>);
+  try {
+    let handle: FileSystemFileHandle | undefined;
+    if (picker) {
+      try {
+        handle = await picker({ suggestedName: name });
+      } catch (e) {
+        if ((e as Error).name === 'AbortError') return; // user cancelled
+        throw e;
+      }
+    }
+    downloading.value = 1;
+    const res = await fetch(videoUrl(m.id, { name }));
+    if (!res.ok || !res.body) throw new Error(`下載失敗：HTTP ${res.status}`);
+    const counted = res.body.pipeThrough(
+      new TransformStream<Uint8Array, Uint8Array>({
+        transform(chunk, controller) {
+          downloading.value += chunk.length;
+          controller.enqueue(chunk);
+        },
+      }),
+    );
+    if (handle) {
+      await counted.pipeTo(await handle.createWritable());
+    } else {
+      const blob = await new Response(counted).blob();
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = name;
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(a.href), 60_000);
+    }
+  } catch (e) {
+    error.value = (e as Error).message;
+  } finally {
+    downloading.value = 0;
+  }
+}
+
 async function remove() {
   if (!meta.value || !confirm(`刪除「${meta.value.title}」？無人引用的 chunk 會一併回收。`)) return;
   deleting.value = true;
@@ -102,7 +150,7 @@ async function remove() {
               <span v-if="meta.remuxed">remuxed</span>
             </div>
             <span class="spacer" />
-            <a :href="videoUrl(meta.id, { name: downloadName(meta) })" :download="downloadName(meta)"><button class="btn"><Icon name="download" :size="18" />下載</button></a>
+            <button class="btn" @click="download" :disabled="downloading > 0"><Icon name="download" :size="18" />{{ downloading ? `下載中 ${formatBytes(downloading)}` : '下載' }}</button>
             <button class="btn danger" @click="remove" :disabled="deleting"><Icon name="trash" :size="18" />刪除</button>
           </div>
         </div>

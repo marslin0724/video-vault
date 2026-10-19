@@ -40,6 +40,15 @@ export const useSession = defineStore('session', () => {
     return p;
   }
 
+  /** DEV/test only: a LocalFolderProvider over the Origin Private File System, needs no user gesture. */
+  async function connectOpfs(name: string): Promise<Provider> {
+    if (!import.meta.env.DEV) throw new Error('OPFS provider is only available in development');
+    const root = await navigator.storage.getDirectory();
+    const p = new LocalFolderProvider(await root.getDirectoryHandle(name, { create: true }));
+    provider.value = markRaw(p);
+    return p;
+  }
+
   async function hasVault(): Promise<boolean> {
     if (!provider.value) throw new Error('not connected');
     return Vault.hasKeyring(provider.value);
@@ -93,6 +102,6 @@ export const useSession = defineStore('session', () => {
 
   return {
     provider, vault, videos, loading,
-    googleClientId, setGoogleClientId, connectGoogle, connectLocal, hasVault, unlock, refreshVideos, logout,
+    googleClientId, setGoogleClientId, connectGoogle, connectLocal, connectOpfs, hasVault, unlock, refreshVideos, logout,
   };
 });

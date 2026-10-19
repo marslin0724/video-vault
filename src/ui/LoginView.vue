@@ -16,13 +16,19 @@ const busy = ref(false);
 const clientId = ref(s.googleClientId());
 const localSupported = LocalFolderProvider.isSupported();
 
-async function connect(kind: 'gdrive' | 'local') {
+const isDev = import.meta.env.DEV;
+
+async function connect(kind: 'gdrive' | 'local' | 'opfs') {
   error.value = '';
   busy.value = true;
   try {
     if (kind === 'gdrive') {
       s.setGoogleClientId(clientId.value);
       await s.connectGoogle();
+    } else if (kind === 'opfs') {
+      const name = prompt('OPFS 儲存區名稱', 'default');
+      if (!name) return;
+      await s.connectOpfs(name);
     } else {
       await s.connectLocal();
     }
@@ -71,6 +77,10 @@ async function submit() {
         <button class="provider" :disabled="busy || !localSupported" @click="connect('local')">
           <Icon name="folder" :size="26" />
           <span><div class="name">開啟本機資料夾</div><div class="desc">{{ localSupported ? '適合備份、匯入匯出' : '此瀏覽器不支援（需 Chrome / Edge 桌面版）' }}</div></span>
+        </button>
+        <button v-if="isDev" class="provider" :disabled="busy" @click="connect('opfs')">
+          <Icon name="folder" :size="26" />
+          <span><div class="name">瀏覽器儲存（測試用）</div><div class="desc">Origin Private File System，僅開發模式</div></span>
         </button>
       </template>
 

@@ -6,16 +6,21 @@
 - 登入 Google Drive（或開啟本機資料夾）後以 passphrase 建立 / 解鎖 vault
 - 上傳：可選 remux 成 faststart mp4（ffmpeg.wasm，不重新壓縮）、chunk 去重、加密、並行上傳、進度
 - 瀏覽影片、縮圖、播放器（重複播放、速度、快捷鍵、全螢幕、子母畫面）
-- 下載原始影片、刪除影片並回收無人引用的 chunk
+- 下載原始影片（Chrome / Edge 直接串流寫入磁碟，其他瀏覽器經 Blob）、刪除影片並回收無人引用的 chunk
 - 工具頁：vault 在兩個儲存空間之間複製（備份 / 匯出 / 匯入），內容保持加密
 
 ## 開發
 ```bash
 npm install
-npm run dev      # http://localhost:5173
-npm test
-npm run build    # 輸出 dist/（含 sw.js 與 ffmpeg core）
+npm run dev        # http://localhost:5173
+npm test           # 單元測試（Vitest：crypto / chunker / range / vault / copy）
+npm run test:e2e   # 端對端測試（Playwright + headless Chromium，見下）
+npm run build      # 輸出 dist/（含 sw.js 與 ffmpeg core）
 ```
+
+### 端對端測試
+`npm run test:e2e` 會用 Playwright 附的 ffmpeg 產生兩支 WebM 測試影片，啟動 dev server，在 headless Chromium 中跑完整流程：建立 vault → 上傳（跨多個 chunk）→ 經 Service Worker 串流播放與 seek → 下載並比對 SHA-256 → 重複上傳驗證 dedup → 匯出到另一個儲存區 → 登入該儲存區播放 → 再上傳並匯回 → 刪除影片後共用 chunk 仍可播放。
+測試用的儲存後端是「瀏覽器儲存（OPFS）」，只在開發模式出現在登入頁與工具頁，走的程式碼與「本機資料夾」完全相同。第一次執行前需 `npx playwright install chromium`。
 
 ## Google OAuth 設定（必要）
 登入頁要填的「Google OAuth Client ID」格式如 `123456789012-xxxx.apps.googleusercontent.com`，依下列步驟取得。每一步的網址右上角都要確認選到的是同一個專案。

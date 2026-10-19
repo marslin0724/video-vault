@@ -2,3 +2,6 @@ node_modules/
 dist/
 .env*
 public/ffmpeg/
+tests/e2e/*.webm
+test-results/
+playwright-report/

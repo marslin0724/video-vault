@@ -18,11 +18,18 @@ const progress = ref<CopyProgress | null>(null);
 const result = ref('');
 const error = ref('');
 const localSupported = LocalFolderProvider.isSupported();
+const isDev = import.meta.env.DEV;
 
-async function connectOther(kind: 'gdrive' | 'local') {
+async function connectOther(kind: 'gdrive' | 'local' | 'opfs') {
   error.value = '';
   try {
-    if (kind === 'gdrive') {
+    if (kind === 'opfs') {
+      const name = prompt('OPFS 儲存區名稱', 'other');
+      if (!name) return;
+      const root = await navigator.storage.getDirectory();
+      other.value = new LocalFolderProvider(await root.getDirectoryHandle(name, { create: true }));
+      otherLabel.value = `瀏覽器儲存 ${name}`;
+    } else if (kind === 'gdrive') {
       const p = new GoogleDriveProvider(GoogleDriveProvider.tokenRequester(s.googleClientId()));
       await p.connect();
       other.value = p;
@@ -68,6 +75,7 @@ async function run() {
         <div class="row">
           <button class="btn" @click="connectOther('gdrive')" :disabled="busy"><Icon name="drive" :size="18" />Google Drive</button>
           <button class="btn" @click="connectOther('local')" :disabled="busy || !localSupported"><Icon name="folder" :size="18" />本機資料夾</button>
+          <button v-if="isDev" class="btn" @click="connectOther('opfs')" :disabled="busy"><Icon name="folder" :size="18" />瀏覽器儲存（測試用）</button>
           <span class="chip" v-if="other"><Icon name="check" :size="14" />已連線：{{ otherLabel }}</span>
         </div>
       </div>
