@@ -3,7 +3,7 @@
 純前端（GitHub Pages）的個人影片庫。影片在瀏覽器內切塊（4 MiB）、SHA-256 去重、AES-256-GCM 加密後存到你自己的儲存空間（v1：Google Drive、本機資料夾），由 Service Worker 以 HTTP Range 串流解密播放。設計細節見 `PLAN.md`。
 
 ## 功能
-- 登入 Google Drive（或開啟本機資料夾）後以 passphrase 建立 / 解鎖 vault
+- 三種儲存後端：Google Drive、本機資料夾（Chrome / Edge 桌面版）、瀏覽器內儲存（OPFS，iPhone 也可用）；以 passphrase 建立 / 解鎖 vault
 - 上傳：可選 remux 成 faststart mp4（ffmpeg.wasm，不重新壓縮）、chunk 去重、加密、並行上傳、進度
 - 瀏覽影片、縮圖、播放器（重複播放、速度、快捷鍵、全螢幕、子母畫面）
 - 下載原始影片（Chrome / Edge 直接串流寫入磁碟，其他瀏覽器經 Blob）、刪除影片並回收無人引用的 chunk
@@ -20,7 +20,7 @@ npm run build      # 輸出 dist/（含 sw.js 與 ffmpeg core）
 
 ### 端對端測試
 `npm run test:e2e` 會用 Playwright 附的 ffmpeg 產生兩支 WebM 測試影片，啟動 dev server，在 headless Chromium 中跑完整流程：建立 vault → 上傳（跨多個 chunk）→ 經 Service Worker 串流播放與 seek → 下載並比對 SHA-256 → 重複上傳驗證 dedup → 匯出到另一個儲存區 → 登入該儲存區播放 → 再上傳並匯回 → 刪除影片後共用 chunk 仍可播放。
-測試用的儲存後端是「瀏覽器儲存（OPFS）」，只在開發模式出現在登入頁與工具頁，走的程式碼與「本機資料夾」完全相同。第一次執行前需 `npx playwright install chromium`。
+測試用的儲存後端是「瀏覽器內儲存（OPFS）」，走的程式碼與「本機資料夾」相同；開發模式下會多問一個儲存區名稱，讓測試能用多個獨立儲存區。另有一個測試強制移除 `createWritable` 以驗證 Safari 的寫入路徑。第一次執行前需 `npx playwright install chromium`。
 
 ## Google OAuth 設定（必要）
 登入頁要填的「Google OAuth Client ID」格式如 `123456789012-xxxx.apps.googleusercontent.com`，依下列步驟取得。每一步的網址右上角都要確認選到的是同一個專案。
@@ -92,7 +92,8 @@ Google Drive 上以扁平檔名存放（檔名即路徑），本機資料夾則�
 
 ## 瀏覽器支援
 - 播放 / 上傳 / Google Drive：Chrome、Edge、Firefox、Safari 16.4+（含 iPhone）
-- 本機資料夾（File System Access API）：僅 Chrome、Edge 桌面版；iPhone 只能用 Google Drive 模式
+- 本機資料夾（File System Access API）：僅 Chrome、Edge 桌面版。iPhone 無法存取 Files app 的資料夾，Apple 未開放此 API
+- 瀏覽器內儲存（OPFS）：Chrome、Edge、Firefox、Safari 15.2+（含 iPhone）。影片存在瀏覽器自己的儲存區，離線可播，但在 Files app 看不到；空間依裝置剩餘容量而定，系統在空間不足時可能清除，請定期匯出到 Drive 備份。iPhone 建議從 Safari「加入主畫面」後使用，儲存較不易被清除
 - iPhone 拍攝的 HEVC 影片上傳後，在 Windows 或桌面版 Chrome 可能無法播放（編碼相容問題，remux 不重新壓縮所以無法解決）
 - 可播放的格式取決於瀏覽器：mp4（H.264/AAC）、webm。mov / mkv 內含 H.264/AAC 時經 remux 即可播。
 

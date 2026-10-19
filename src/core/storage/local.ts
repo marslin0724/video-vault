@@ -51,9 +51,13 @@ export class LocalFolderProvider implements StorageProvider {
     const { dirs, name } = this.split(path);
     const d = await this.dir(dirs, true);
     const fh = await d.getFileHandle(name, { create: true });
-    const w = await fh.createWritable();
-    await w.write(data as BufferSource);
-    await w.close();
+    if (typeof (fh as any).createWritable === 'function') {
+      const w = await fh.createWritable();
+      await w.write(data as BufferSource);
+      await w.close();
+    } else {
+      await writeViaSyncAccessHandle(d, name, data); // Safari: no createWritable on the main thread
+    }
   }
 
   async remove(path: string): Promise<void> {
@@ -79,4 +83,41 @@ export class LocalFolderProvider implements StorageProvider {
   getByLocator(locator: string): Promise<Uint8Array> {
     return this.get(locator);
   }
+}
+
+// Safari (incl. iPhone) lacks FileSystemFileHandle.createWritable but offers createSyncAccessHandle
+// inside workers. The worker is built from a string so no bundler plumbing is needed in the SW build.
+const syncWriterSource = `
+self.onmessage = async (e) => {
+  const { dir, name, data } = e.data;
+  try {
+    const fh = await dir.getFileHandle(name, { create: true });
+    const h = await fh.createSyncAccessHandle();
+    try {
+      h.truncate(0);
+      h.write(data, { at: 0 });
+      h.flush();
+    } finally {
+      h.close();
+    }
+    self.postMessage({ ok: true });
+  } catch (err) {
+    self.postMessage({ ok: false, error: String(err && err.message || err) });
+  }
+};`;
+let syncWriter: Worker | undefined;
+let syncQueue: Promise<void> = Promise.resolve();
+
+function writeViaSyncAccessHandle(dir: FileSystemDirectoryHandle, name: string, data: Uint8Array): Promise<void> {
+  syncWriter ??= new Worker(URL.createObjectURL(new Blob([syncWriterSource], { type: 'text/javascript' })));
+  const run = () =>
+    new Promise<void>((resolve, reject) => {
+      const w = syncWriter!;
+      w.onmessage = (e: MessageEvent<{ ok: boolean; error?: string }>) => (e.data.ok ? resolve() : reject(new Error(e.data.error)));
+      w.onerror = (e) => reject(new Error(e.message));
+      w.postMessage({ dir, name, data });
+    });
+  // one write at a time: the worker handles a single message/response pair
+  syncQueue = syncQueue.then(run, run);
+  return syncQueue;
 }

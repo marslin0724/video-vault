@@ -2,6 +2,7 @@
 import { decryptBytes } from '../core/crypto';
 import { GoogleDriveProvider } from '../core/storage/gdrive';
 import { LocalFolderProvider } from '../core/storage/local';
+import { OpfsProvider } from '../core/storage/opfs';
 import type { StorageProvider } from '../core/types';
 import type { VideoDescriptor } from '../core/vault';
 import { chunkOffsets, parseRange, spansFor } from './range';
@@ -12,7 +13,7 @@ import { SW_CACHE_BYTES } from '../config';
 declare const self: ServiceWorkerGlobalScope;
 
 let session: SwSession | null = null;
-let provider: StorageProvider | null = null;
+let provider: Promise<StorageProvider> | null = null;
 const videos = new Map<string, VideoDescriptor>();
 const waiters = new Map<string, Array<() => void>>();
 
@@ -32,8 +33,10 @@ self.addEventListener('message', (e: ExtendableMessageEvent) => {
   }
 });
 
-function makeProvider(s: SwSession): StorageProvider {
-  return s.provider === 'gdrive' ? GoogleDriveProvider.fromToken(s.token) : new LocalFolderProvider(s.handle);
+async function makeProvider(s: SwSession): Promise<StorageProvider> {
+  if (s.provider === 'gdrive') return GoogleDriveProvider.fromToken(s.token);
+  if (s.provider === 'opfs') return OpfsProvider.open(s.name); // the SW opens OPFS itself
+  return new LocalFolderProvider(s.handle);
 }
 
 function wake(topic: string) {
@@ -86,12 +89,12 @@ function getChunk(hash: string, locator: string, size: number): Promise<Uint8Arr
     const s = await ensureSession();
     let blob: Uint8Array;
     try {
-      blob = await provider!.getByLocator(locator);
+      blob = await (await provider!).getByLocator(locator);
     } catch (e) {
       // token may have expired: ask the page for a fresh session once
       if (!/401/.test(String(e))) throw e;
       await ensureSession(true);
-      blob = await provider!.getByLocator(locator);
+      blob = await (await provider!).getByLocator(locator);
     }
     return decryptBytes(s.key, blob);
   })();

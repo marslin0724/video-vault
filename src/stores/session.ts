@@ -4,11 +4,12 @@ import { Vault } from '../core/vault';
 import type { VideoMeta } from '../core/types';
 import { GoogleDriveProvider } from '../core/storage/gdrive';
 import { LocalFolderProvider } from '../core/storage/local';
+import { OpfsProvider } from '../core/storage/opfs';
 import { GOOGLE_CLIENT_ID } from '../config';
 import { bindSwSession, registerSw } from '../sw/client';
 import type { SwSession } from '../sw/protocol';
 
-type Provider = GoogleDriveProvider | LocalFolderProvider;
+type Provider = GoogleDriveProvider | LocalFolderProvider | OpfsProvider;
 const CLIENT_ID_KEY = 'vv.googleClientId';
 
 export const useSession = defineStore('session', () => {
@@ -22,6 +23,7 @@ export const useSession = defineStore('session', () => {
     const p = provider.value;
     if (!p) return '';
     if (p.kind === 'gdrive') return p.user ? `Google Drive · ${p.user}` : 'Google Drive';
+    if (p instanceof OpfsProvider) return '瀏覽器內儲存';
     return `本機資料夾 · ${p.root.name}`;
   });
 
@@ -47,11 +49,9 @@ export const useSession = defineStore('session', () => {
     return p;
   }
 
-  /** DEV/test only: a LocalFolderProvider over the Origin Private File System, needs no user gesture. */
-  async function connectOpfs(name: string): Promise<Provider> {
-    if (!import.meta.env.DEV) throw new Error('OPFS provider is only available in development');
-    const root = await navigator.storage.getDirectory();
-    const p = new LocalFolderProvider(await root.getDirectoryHandle(name, { create: true }));
+  /** Browser-managed storage (OPFS); the only "local" option on iPhone. */
+  async function connectOpfs(name = 'default'): Promise<Provider> {
+    const p = await OpfsProvider.open(name);
     provider.value = markRaw(p);
     return p;
   }
@@ -74,6 +74,7 @@ export const useSession = defineStore('session', () => {
     const v = vault.value;
     if (!p || !v) return null;
     if (p.kind === 'gdrive') return { provider: 'gdrive', token: p.accessToken, key: v.key };
+    if (p instanceof OpfsProvider) return { provider: 'opfs', name: p.name, key: v.key };
     return { provider: 'local', handle: p.root, key: v.key };
   }
 

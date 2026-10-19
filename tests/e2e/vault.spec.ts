@@ -15,7 +15,7 @@ const sha256 = (b: Buffer) => createHash('sha256').update(b).digest('hex');
 async function login(page: Page, store: string, create: boolean) {
   await page.goto('/#/login');
   page.once('dialog', (d) => d.accept(store));
-  await page.getByRole('button', { name: /瀏覽器儲存/ }).click();
+  await page.getByRole('button', { name: /瀏覽器內儲存/ }).click();
   await page.getByPlaceholder(/^passphrase/).fill(PASS);
   if (create) await page.getByPlaceholder('再輸入一次').fill(PASS);
   await page.getByRole('button', { name: create ? '建立' : '解鎖', exact: true }).click();
@@ -24,7 +24,7 @@ async function login(page: Page, store: string, create: boolean) {
 
 async function logout(page: Page) {
   await page.getByTitle('登出').click();
-  await expect(page.getByRole('button', { name: /瀏覽器儲存/ })).toBeVisible();
+  await expect(page.getByRole('button', { name: /瀏覽器內儲存/ })).toBeVisible();
 }
 
 async function upload(page: Page, file: string): Promise<string> {
@@ -73,7 +73,7 @@ async function seekNearEnd(page: Page) {
 async function copyTo(page: Page, otherStore: string, direction: '匯出' | '匯入') {
   await page.goto('/#/tools');
   page.once('dialog', (d) => d.accept(otherStore));
-  await page.getByRole('button', { name: /瀏覽器儲存/ }).click();
+  await page.getByRole('button', { name: /瀏覽器內儲存/ }).click();
   await expect(page.getByText(/已連線/)).toBeVisible();
   await page.getByLabel(new RegExp(direction)).check();
   await page.getByRole('button', { name: '開始', exact: true }).click();
@@ -157,4 +157,15 @@ test('upload, stream, download, export/import, dedup, delete', async ({ page }) 
   await openFirstVideo(page, 'sample1');
   await expectPlaying(page);
   await seekNearEnd(page);
+});
+
+test('OPFS writes work without createWritable (Safari path via sync access handle worker)', async ({ page }) => {
+  await page.addInitScript(() => {
+    delete (FileSystemFileHandle.prototype as any).createWritable;
+  });
+  await login(page, 'store-safari', true);
+  await upload(page, SAMPLE2);
+  await expect(page.locator('.tile')).toHaveCount(1);
+  await openFirstVideo(page, 'sample2');
+  await expectPlaying(page);
 });

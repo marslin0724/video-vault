@@ -3,6 +3,8 @@ import { ref } from 'vue';
 import { useRouter } from 'vue-router';
 import { useSession } from '../stores/session';
 import { LocalFolderProvider } from '../core/storage/local';
+import { OpfsProvider } from '../core/storage/opfs';
+import { formatBytes } from './media';
 import Icon from './Icon.vue';
 
 const s = useSession();
@@ -17,6 +19,9 @@ const clientId = ref(s.googleClientId());
 const localSupported = LocalFolderProvider.isSupported();
 
 const isDev = import.meta.env.DEV;
+const opfsSupported = OpfsProvider.isSupported();
+const opfsInfo = ref('');
+if (opfsSupported) void OpfsProvider.estimate().then((e) => e && (opfsInfo.value = `已用 ${formatBytes(e.usage)} / 可用約 ${formatBytes(e.quota)}`));
 
 async function connect(kind: 'gdrive' | 'local' | 'opfs') {
   error.value = '';
@@ -26,7 +31,8 @@ async function connect(kind: 'gdrive' | 'local' | 'opfs') {
       s.setGoogleClientId(clientId.value);
       await s.connectGoogle();
     } else if (kind === 'opfs') {
-      const name = prompt('OPFS 儲存區名稱', 'default');
+      // tests need several independent stores; real users get one
+      const name = isDev ? prompt('OPFS 儲存區名稱', 'default') : 'default';
       if (!name) return;
       await s.connectOpfs(name);
     } else {
@@ -78,9 +84,9 @@ async function submit() {
           <Icon name="folder" :size="26" />
           <span><div class="name">開啟本機資料夾</div><div class="desc">{{ localSupported ? '適合備份、匯入匯出' : '此瀏覽器不支援（需 Chrome / Edge 桌面版）' }}</div></span>
         </button>
-        <button v-if="isDev" class="provider" :disabled="busy" @click="connect('opfs')">
+        <button class="provider" :disabled="busy || !opfsSupported" @click="connect('opfs')">
           <Icon name="folder" :size="26" />
-          <span><div class="name">瀏覽器儲存（測試用）</div><div class="desc">Origin Private File System，僅開發模式</div></span>
+          <span><div class="name">瀏覽器內儲存</div><div class="desc">{{ opfsSupported ? `存在此瀏覽器裡，iPhone 也可用；${opfsInfo || '離線可播'}` : '此瀏覽器不支援' }}</div></span>
         </button>
       </template>
 
