@@ -37,6 +37,8 @@ export const useSession = defineStore('session', () => {
   const loading = ref(false);
   const swReady = ref(false);
 
+  const folders = computed(() => (vault.value ? vault.value.folders(videos.value) : []));
+
   const providerLabel = computed(() => {
     const p = provider.value;
     if (!p) return '';
@@ -175,7 +177,7 @@ export const useSession = defineStore('session', () => {
   }
 
   return {
-    provider, vault, videos, loading, providerLabel,
+    provider, vault, videos, loading, providerLabel, folders,
     googleClientId, setGoogleClientId, connectGoogle, connectLocal, connectOpfs, hasVault, unlock, refreshVideos, logout,
     storedSession, resume, resumeLocalWithPrompt,
   };

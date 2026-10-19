@@ -27,6 +27,8 @@ export interface Keyring {
 export interface ChunkIndex {
   version: 1;
   chunks: Record<string, { size: number }>;
+  /** Explicitly created folders (so empty ones survive); folders also exist implicitly via video.folder. */
+  folders?: string[];
 }
 
 export interface VideoMeta {
@@ -40,6 +42,8 @@ export interface VideoMeta {
   width: number;
   height: number;
   createdAt: string;
+  /** Virtual folder path like "trips/2024"; '' or missing = root. */
+  folder?: string;
   remuxed: boolean;
   chunkSize: number;
   chunks: string[];

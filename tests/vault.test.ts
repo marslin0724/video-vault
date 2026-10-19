@@ -87,3 +87,24 @@ describe('copyVault', () => {
     await expect(copyVault(p, otherP)).rejects.toThrow(/different vault/);
   });
 });
+
+describe('folders', () => {
+  it('creates, lists with ancestors, moves videos and refuses to delete non-empty folders', async () => {
+    const { v } = await freshVault();
+    expect(await v.createFolder(' trips / 2024 ')).toBe('trips/2024');
+    const m = await v.uploadVideo({ ...base, blob: video(10, 1), folder: 'work/q1' });
+    let videos = await v.listVideos();
+    expect(videos[0].folder).toBe('work/q1');
+    expect(v.folders(videos)).toEqual(['trips', 'trips/2024', 'work', 'work/q1']);
+    await expect(v.deleteFolder('work', videos)).rejects.toThrow(/不是空/);
+    await expect(v.deleteFolder('trips', videos)).rejects.toThrow(/不是空/);
+    await v.moveVideo(m, 'trips/2024');
+    videos = await v.listVideos();
+    expect(videos[0].folder).toBe('trips/2024');
+    expect(v.folders(videos)).toEqual(['trips', 'trips/2024']);
+    await v.deleteFolder('trips/2024', videos.map((x) => ({ ...x, folder: '' })));
+    expect(v.index.folders).toEqual(['trips']);
+    // old metas without `folder` count as root
+    expect(v.folders([{ ...m, folder: undefined }])).toEqual(['trips']);
+  });
+});

@@ -16,6 +16,18 @@ const src = ref('');
 const error = ref('');
 const deleting = ref(false);
 const others = computed(() => s.videos.filter((v) => v.id !== props.id));
+const folderLink = computed(() => (meta.value?.folder ? { path: '/', query: { folder: meta.value.folder } } : { path: '/' }));
+
+async function moveTo(e: Event) {
+  const target = (e.target as HTMLSelectElement).value;
+  if (!meta.value || target === (meta.value.folder ?? '')) return;
+  try {
+    meta.value = await s.vault!.moveVideo(meta.value, target);
+    await s.refreshVideos();
+  } catch (err) {
+    error.value = (err as Error).message;
+  }
+}
 
 watch(
   () => props.id,
@@ -135,7 +147,7 @@ async function remove() {
     <div class="watch" v-if="meta">
       <div>
         <div class="row" style="margin-bottom: 12px">
-          <router-link to="/"><button class="btn"><Icon name="arrowBack" :size="18" />回到影片列表</button></router-link>
+          <router-link :to="folderLink"><button class="btn"><Icon name="arrowBack" :size="18" />回到影片列表{{ meta.folder ? `（${meta.folder}）` : '' }}</button></router-link>
         </div>
         <VideoPlayer v-if="src" :key="meta.id" :src="src" :title="meta.title" @back="router.push('/')" @error="onPlayerError" />
         <div class="info">
@@ -150,6 +162,13 @@ async function remove() {
               <span v-if="meta.remuxed">remuxed</span>
             </div>
             <span class="spacer" />
+            <label class="row" style="gap: 6px" title="移至資料夾">
+              <Icon name="move" :size="18" />
+              <select class="input" :value="meta.folder ?? ''" @change="moveTo">
+                <option value="">（根目錄）</option>
+                <option v-for="f in s.folders" :key="f" :value="f">{{ f }}</option>
+              </select>
+            </label>
             <button class="btn" @click="download" :disabled="downloading > 0"><Icon name="download" :size="18" />{{ downloading ? `下載中 ${formatBytes(downloading)}` : '下載' }}</button>
             <button class="btn danger" @click="remove" :disabled="deleting"><Icon name="trash" :size="18" />刪除</button>
           </div>

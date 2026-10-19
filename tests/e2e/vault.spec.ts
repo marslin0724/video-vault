@@ -19,7 +19,7 @@ async function login(page: Page, store: string, create: boolean) {
   await page.getByPlaceholder(/^passphrase/).fill(PASS);
   if (create) await page.getByPlaceholder('再輸入一次').fill(PASS);
   await page.getByRole('button', { name: create ? '建立' : '解鎖', exact: true }).click();
-  await expect(page.getByRole('heading', { name: '我的影片' })).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByRole('button', { name: '上傳影片' })).toBeVisible({ timeout: 30_000 });
 }
 
 async function logout(page: Page) {
@@ -177,4 +177,39 @@ test('OPFS writes work without createWritable (Safari path via sync access handl
   await expect(page.locator('.tile')).toHaveCount(1);
   await openFirstVideo(page, 'sample2');
   await expectPlaying(page);
+});
+
+test('folders: create, upload into, move, breadcrumbs, delete empty', async ({ page }) => {
+  await login(page, 'store-folders', true);
+  page.once('dialog', (d) => d.accept('trips'));
+  await page.getByRole('button', { name: '新增資料夾' }).click();
+  await expect(page).toHaveURL(/folder=trips/);
+  await upload(page, SAMPLE2);
+  await expect(page.locator('.tile')).toHaveCount(1);
+  // root shows the folder with a count, not the video
+  await page.getByRole('button', { name: '全部影片' }).click();
+  await expect(page.locator('.tile')).toHaveCount(0);
+  await expect(page.locator('.folder', { hasText: 'trips' })).toContainText('1 支');
+  // nested folder, then move the video there from the watch page
+  await page.locator('.folder', { hasText: 'trips' }).click();
+  page.once('dialog', (d) => d.accept('2024'));
+  await page.getByRole('button', { name: '新增資料夾' }).click();
+  await expect(page).toHaveURL(/folder=trips%2F2024|folder=trips\/2024/);
+  await page.getByRole('button', { name: '全部影片' }).click();
+  await page.locator('.folder', { hasText: 'trips' }).click();
+  await openFirstVideo(page, 'sample2');
+  await page.locator('select').selectOption('trips/2024');
+  await expect(page.getByRole('button', { name: /回到影片列表（trips\/2024）/ })).toBeVisible();
+  await page.getByRole('button', { name: /回到影片列表/ }).click();
+  await expect(page.locator('.tile')).toHaveCount(1);
+  await expect(page.locator('.crumbs .here')).toHaveText('2024');
+  // move back to root; then 2024 is empty and can be deleted, trips cannot be deleted while it has a subfolder
+  await openFirstVideo(page, 'sample2');
+  await page.locator('select').selectOption('');
+  await page.getByRole('button', { name: /回到影片列表/ }).click();
+  await expect(page.locator('.tile')).toHaveCount(1);
+  await page.locator('.folder', { hasText: 'trips' }).click();
+  page.once('dialog', (d) => d.accept());
+  await page.locator('.folder', { hasText: '2024' }).locator('.close-x').click();
+  await expect(page.locator('.folder')).toHaveCount(0);
 });

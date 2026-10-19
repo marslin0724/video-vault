@@ -6,6 +6,7 @@ import type { UploadProgress } from '../core/vault';
 import { probeVideo, formatBytes } from './media';
 import Icon from './Icon.vue';
 
+const props = defineProps<{ folder: string }>();
 const emit = defineEmits<{ close: [] }>();
 const s = useSession();
 const files = ref<File[]>([]);
@@ -42,6 +43,7 @@ async function start() {
       const meta = await s.vault.uploadVideo(
         {
           blob: r.blob,
+          folder: props.folder,
           title: file.name.replace(/\.[^.]+$/, ''),
           originalName: file.name,
           mime: r.remuxed ? 'video/mp4' : file.type || 'video/mp4',
@@ -71,7 +73,7 @@ async function start() {
     <div class="card modal stack">
       <div class="dialog-head">
         <Icon name="upload" :size="22" />
-        <h3>上傳影片</h3>
+        <h3>上傳影片<span class="muted" v-if="props.folder" style="font-weight: 400"> 到 {{ props.folder }}</span></h3>
         <button class="close-x" @click="emit('close')" :disabled="busy" title="關閉"><Icon name="close" :size="20" /></button>
       </div>
       <label class="dropzone" :class="{ over }" @dragover.prevent="over = true" @dragleave="over = false" @drop.prevent="drop">

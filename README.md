@@ -6,6 +6,7 @@
 - 三種儲存後端：Google Drive、本機資料夾（Chrome / Edge 桌面版）、瀏覽器內儲存（OPFS，iPhone 也可用）；以 passphrase 建立 / 解鎖 vault
 - 上傳：可選 remux 成 faststart mp4（ffmpeg.wasm，不重新壓縮）、chunk 去重、加密、並行上傳、進度
 - 瀏覽影片、縮圖、播放器（重複播放、速度、快捷鍵、全螢幕、子母畫面）
+- 虛擬資料夾：建立、巢狀、上傳到目前資料夾、從播放頁移動影片、刪除空資料夾。資料夾路徑存在影片 meta 的 `folder` 欄位，空資料夾清單存在 index，copy/export 不受影響
 - 下載原始影片（Chrome / Edge 直接串流寫入磁碟，其他瀏覽器經 Blob）、刪除影片並回收無人引用的 chunk
 - 工具頁：vault 在兩個儲存空間之間複製（備份 / 匯出 / 匯入），內容保持加密
 
@@ -84,8 +85,8 @@ ssh -L 5173:localhost:5173 <user>@<dev 機器 ip>
 ```
 video-vault/
   keyring.json             salt、PBKDF2 參數、以 passphrase 包起來的 master key
-  index.json.enc           chunk hash → size（加密）
-  meta/<videoId>.json.enc  影片 metadata、chunk 列表、縮圖（加密）
+  index.json.enc           chunk hash → size、明確建立的資料夾清單（加密）
+  meta/<videoId>.json.enc  影片 metadata、所屬資料夾、chunk 列表、縮圖（加密）
   chunks/<sha256>          [12-byte IV][AES-GCM ciphertext + tag]
 ```
 Google Drive 上以扁平檔名存放（檔名即路徑），本機資料夾則為實際子目錄。兩者可互相複製。

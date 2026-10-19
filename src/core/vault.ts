@@ -14,6 +14,7 @@ export interface UploadProgress {
 export interface UploadInput {
   blob: Blob;
   title: string;
+  folder?: string;
   originalName: string;
   mime: string;
   duration: number;
@@ -134,6 +135,7 @@ export class Vault {
       width: input.width,
       height: input.height,
       createdAt: new Date().toISOString(),
+      folder: normalizeFolder(input.folder ?? ''),
       remuxed: input.remuxed,
       chunkSize: CHUNK_SIZE,
       chunks: hashes,
@@ -160,6 +162,43 @@ export class Vault {
     return { removedChunks };
   }
 
+  // ---- virtual folders ----
+
+  /** All folders: explicitly created ones plus every ancestor of any video's folder. Sorted. */
+  folders(videos: VideoMeta[]): string[] {
+    const set = new Set<string>(this.index.folders ?? []);
+    for (const v of videos) for (const a of ancestors(v.folder ?? '')) set.add(a);
+    for (const f of [...set]) for (const a of ancestors(f)) set.add(a);
+    set.delete('');
+    return [...set].sort();
+  }
+
+  async createFolder(path: string): Promise<string> {
+    const f = normalizeFolder(path);
+    if (!f) throw new Error('資料夾名稱不可為空');
+    const list = new Set(this.index.folders ?? []);
+    for (const a of ancestors(f)) if (a) list.add(a);
+    this.index.folders = [...list].sort();
+    await this.saveIndex();
+    return f;
+  }
+
+  /** Only empty folders (no videos, no subfolders) can be deleted. */
+  async deleteFolder(path: string, videos: VideoMeta[]): Promise<void> {
+    const f = normalizeFolder(path);
+    const inUse = videos.some((v) => (v.folder ?? '') === f || (v.folder ?? '').startsWith(f + '/'));
+    const hasChildren = this.folders(videos).some((x) => x.startsWith(f + '/'));
+    if (inUse || hasChildren) throw new Error('資料夾不是空的');
+    this.index.folders = (this.index.folders ?? []).filter((x) => x !== f);
+    await this.saveIndex();
+  }
+
+  async moveVideo(meta: VideoMeta, folder: string): Promise<VideoMeta> {
+    const updated = { ...meta, folder: normalizeFolder(folder) };
+    await this.saveVideo(updated);
+    return updated;
+  }
+
   /** Everything the service worker needs to serve byte ranges of a video. */
   async describe(meta: VideoMeta): Promise<VideoDescriptor> {
     const chunks: ChunkRef[] = [];
@@ -178,4 +217,21 @@ export async function runPool<T>(items: T[], concurrency: number, fn: (item: T) 
     while (i < items.length) await fn(items[i++]);
   });
   await Promise.all(workers);
+}
+
+/** Trim, collapse slashes, drop empty/dot segments. Returns '' for the root. */
+export function normalizeFolder(path: string): string {
+  return path
+    .split('/')
+    .map((p) => p.trim())
+    .filter((p) => p && p !== '.' && p !== '..')
+    .join('/');
+}
+
+/** '' , 'a', 'a/b' for 'a/b'. */
+export function ancestors(folder: string): string[] {
+  const out = [''];
+  const parts = folder.split('/').filter(Boolean);
+  for (let i = 1; i <= parts.length; i++) out.push(parts.slice(0, i).join('/'));
+  return out;
 }

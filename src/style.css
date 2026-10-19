@@ -94,6 +94,22 @@ p { margin: 0; }
 .empty { padding: 80px 20px; text-align: center; color: var(--text-2); }
 .empty svg { color: #444; margin-bottom: 12px; }
 
+/* folders */
+.crumbs { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; font-size: 15px; }
+.crumbs a, .crumbs button.link { color: var(--text-2); background: none; border: 0; padding: 4px 6px; border-radius: 6px; font: inherit; cursor: pointer; display: inline-flex; align-items: center; gap: 4px; }
+.crumbs a:hover, .crumbs button.link:hover { background: var(--bg-hover); color: var(--text); }
+.crumbs .sep { color: #555; }
+.crumbs .here { padding: 4px 6px; font-weight: 600; }
+.folders { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 10px; }
+.folder { display: flex; align-items: center; gap: 10px; padding: 12px 14px; border-radius: 10px; background: var(--bg-elev); border: 1px solid var(--border); color: var(--text); cursor: pointer; }
+.folder:hover { background: var(--bg-hover); }
+.folder svg { color: #f4c542; flex: none; }
+.folder .name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 500; }
+.folder .count { color: var(--text-2); font-size: 12px; }
+.folder .close-x { width: 28px; height: 28px; }
+.section-title { font-size: 13px; color: var(--text-2); text-transform: uppercase; letter-spacing: 0.06em; margin: 6px 0 -4px; }
+select.input { height: 36px; width: auto; min-width: 180px; }
+
 /* watch page */
 .watch { display: grid; grid-template-columns: minmax(0, 1fr) 380px; gap: 24px; align-items: start; }
 @media (max-width: 1100px) { .watch { grid-template-columns: 1fr; } }

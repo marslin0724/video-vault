@@ -38,8 +38,8 @@ Browser (GitHub Pages, HTTPS)
 ### 儲存版面（Drive 內 `video-vault/` 資料夾，其他 provider 相同結構）
 ```
 keyring.json            salt、KDF 參數、wrapped master key（明文 JSON）
-index.json.enc          { chunks: { "<sha256>": { id: "<driveFileId>", size } } }
-meta/<videoId>.json.enc { title, size, mime, duration, createdAt, thumb(base64 jpeg), chunks: ["<sha256>", ...] }
+index.json.enc          { chunks: { "<sha256>": { size } }, folders: ["trips", "trips/2024"] }
+meta/<videoId>.json.enc { title, size, mime, duration, createdAt, folder, thumb(base64 jpeg), chunks: ["<sha256>", ...] }
 chunks/<sha256>         加密後的 chunk 二進位（IV + ciphertext + tag）
 ```
 三種物件分開存，Copy/Export/Import 就是把這些物件原封搬移，不需解密。
