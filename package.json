@@ -9,7 +9,8 @@
     "preview": "vite preview",
     "test": "vitest run",
     "copy:ffmpeg": "node scripts/copy-ffmpeg.mjs",
-    "test:e2e": "node tests/e2e/gen-sample.mjs tests/e2e/sample1.webm 1 150 2000k && node tests/e2e/gen-sample.mjs tests/e2e/sample2.webm 7 6 && playwright test"
+    "test:e2e": "node tests/e2e/gen-sample.mjs tests/e2e/sample1.webm 1 150 2000k && node tests/e2e/gen-sample.mjs tests/e2e/sample2.webm 7 6 && playwright test --project=chromium",
+    "test:e2e:iphone": "playwright test --project=iphone-webkit"
   },
   "dependencies": {
     "@ffmpeg/core": "^0.12.10",

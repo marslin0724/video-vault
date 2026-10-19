@@ -14,7 +14,13 @@ export class OpfsProvider extends LocalFolderProvider {
   }
 
   static async open(name: string): Promise<OpfsProvider> {
-    const root = await navigator.storage.getDirectory();
+    let root: FileSystemDirectoryHandle;
+    try {
+      root = await navigator.storage.getDirectory();
+    } catch (e) {
+      // Safari/WebKit throws UnknownError here in private browsing, where OPFS is unavailable.
+      throw new Error(`瀏覽器內儲存無法使用（${(e as Error).message}）。若是私密/無痕瀏覽模式，請改用一般分頁。`);
+    }
     const dir = await root.getDirectoryHandle(name, { create: true });
     // Ask the browser not to evict this origin's data under storage pressure (best effort).
     void navigator.storage.persist?.().catch(() => {});

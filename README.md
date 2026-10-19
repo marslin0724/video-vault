@@ -15,12 +15,14 @@
 npm install
 npm run dev        # http://localhost:5173
 npm test           # 單元測試（Vitest：crypto / chunker / range / vault / copy）
-npm run test:e2e   # 端對端測試（Playwright + headless Chromium，見下）
+npm run test:e2e          # 端對端測試（Playwright + headless Chromium，見下）
+npm run test:e2e:iphone   # 同一套測試以 WebKit + iPhone 14 模擬執行（需先 npx playwright install webkit 與 install-deps）
 npm run build      # 輸出 dist/（含 sw.js 與 ffmpeg core）
 ```
 
 ### 端對端測試
 `npm run test:e2e` 會用 Playwright 附的 ffmpeg 產生兩支 WebM 測試影片，啟動 dev server，在 headless Chromium 中跑完整流程：建立 vault → 上傳（跨多個 chunk）→ 經 Service Worker 串流播放與 seek → 下載並比對 SHA-256 → 重複上傳驗證 dedup → 匯出到另一個儲存區 → 登入該儲存區播放 → 再上傳並匯回 → 刪除影片後共用 chunk 仍可播放。
+iPhone 專案用的是 Safari 同核心的 WebKit 加 iPhone 視窗與觸控模擬，能驗證 OPFS、Service Worker、Safari 寫入路徑與版面；真機的儲存配額、背景暫停、HEVC 播放與「加入主畫面」行為測不到。WebKit 在無痕 context 沒有 OPFS，所以該專案每個測試用獨立的 persistent profile 執行（見 `tests/e2e/fixtures.ts`）。
 測試用的儲存後端是「瀏覽器內儲存（OPFS）」，走的程式碼與「本機資料夾」相同；開發模式下會多問一個儲存區名稱，讓測試能用多個獨立儲存區。另有一個測試強制移除 `createWritable` 以驗證 Safari 的寫入路徑。第一次執行前需 `npx playwright install chromium`。
 
 ## Google OAuth 設定（必要）
@@ -94,7 +96,7 @@ Google Drive 上以扁平檔名存放（檔名即路徑），本機資料夾則�
 ## 瀏覽器支援
 - 播放 / 上傳 / Google Drive：Chrome、Edge、Firefox、Safari 16.4+（含 iPhone）
 - 本機資料夾（File System Access API）：僅 Chrome、Edge 桌面版。iPhone 無法存取 Files app 的資料夾，Apple 未開放此 API
-- 瀏覽器內儲存（OPFS）：Chrome、Edge、Firefox、Safari 15.2+（含 iPhone）。影片存在瀏覽器自己的儲存區，離線可播，但在 Files app 看不到；空間依裝置剩餘容量而定，系統在空間不足時可能清除，請定期匯出到 Drive 備份。iPhone 建議從 Safari「加入主畫面」後使用，儲存較不易被清除
+- 瀏覽器內儲存（OPFS）：Chrome、Edge、Firefox、Safari 15.2+（含 iPhone）。Safari 私密瀏覽模式下不可用。影片存在瀏覽器自己的儲存區，離線可播，但在 Files app 看不到；空間依裝置剩餘容量而定，系統在空間不足時可能清除，請定期匯出到 Drive 備份。iPhone 建議從 Safari「加入主畫面」後使用，儲存較不易被清除
 - iPhone 拍攝的 HEVC 影片上傳後，在 Windows 或桌面版 Chrome 可能無法播放（編碼相容問題，remux 不重新壓縮所以無法解決）
 - 可播放的格式取決於瀏覽器：mp4（H.264/AAC）、webm。mov / mkv 內含 H.264/AAC 時經 remux 即可播。
 

@@ -5,3 +5,4 @@ public/ffmpeg/
 tests/e2e/*.webm
 test-results/
 playwright-report/
+tests/e2e/.tmp/
