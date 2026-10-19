@@ -6,7 +6,8 @@ const UPLOAD = 'https://www.googleapis.com/upload/drive/v3';
 const SCOPE = 'https://www.googleapis.com/auth/drive.file';
 const FOLDER_MIME = 'application/vnd.google-apps.folder';
 
-export type TokenRequester = () => Promise<string>;
+/** `selectAccount` forces Google's account chooser (user-initiated login); omitted for silent token refresh. */
+export type TokenRequester = (opts?: { selectAccount?: boolean }) => Promise<string>;
 
 interface DriveFile {
   id: string;
@@ -23,6 +24,8 @@ export class GoogleDriveProvider implements StorageProvider {
   private ids = new Map<string, DriveFile>();
   private folderId = '';
   private token = '';
+  /** Email of the signed-in Google account, filled by connect(). */
+  user = '';
 
   constructor(private requestToken: TokenRequester) {}
 
@@ -35,7 +38,7 @@ export class GoogleDriveProvider implements StorageProvider {
 
   /** Obtain an OAuth token through Google Identity Services (page side only). */
   static tokenRequester(clientId: string): TokenRequester {
-    return () =>
+    return (opts) =>
       new Promise<string>((resolve, reject) => {
         const g = (globalThis as any).google;
         if (!g?.accounts?.oauth2) return reject(new Error('Google Identity Services not loaded'));
@@ -46,7 +49,7 @@ export class GoogleDriveProvider implements StorageProvider {
             resp.access_token ? resolve(resp.access_token) : reject(new Error(resp.error ?? 'auth failed')),
           error_callback: (e: { type: string }) => reject(new Error(e.type)),
         });
-        client.requestAccessToken();
+        client.requestAccessToken({ prompt: opts?.selectAccount ? 'select_account' : '' });
       });
   }
 
@@ -55,7 +58,9 @@ export class GoogleDriveProvider implements StorageProvider {
   }
 
   async connect(): Promise<void> {
-    this.token = await this.requestToken();
+    this.token = await this.requestToken({ selectAccount: true });
+    const about = (await (await this.fetch(`${API}/about?fields=user(emailAddress)`)).json()) as { user?: { emailAddress?: string } };
+    this.user = about.user?.emailAddress ?? '';
     this.folderId = await this.findOrCreateFolder();
     await this.refreshListing();
   }

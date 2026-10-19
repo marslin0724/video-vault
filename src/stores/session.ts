@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia';
-import { markRaw, ref, shallowRef } from 'vue';
+import { computed, markRaw, ref, shallowRef } from 'vue';
 import { Vault } from '../core/vault';
 import type { VideoMeta } from '../core/types';
 import { GoogleDriveProvider } from '../core/storage/gdrive';
@@ -17,6 +17,13 @@ export const useSession = defineStore('session', () => {
   const videos = ref<VideoMeta[]>([]);
   const loading = ref(false);
   const swReady = ref(false);
+
+  const providerLabel = computed(() => {
+    const p = provider.value;
+    if (!p) return '';
+    if (p.kind === 'gdrive') return p.user ? `Google Drive · ${p.user}` : 'Google Drive';
+    return `本機資料夾 · ${p.root.name}`;
+  });
 
   function googleClientId(): string {
     return GOOGLE_CLIENT_ID || localStorage.getItem(CLIENT_ID_KEY) || '';
@@ -101,7 +108,7 @@ export const useSession = defineStore('session', () => {
   }
 
   return {
-    provider, vault, videos, loading,
+    provider, vault, videos, loading, providerLabel,
     googleClientId, setGoogleClientId, connectGoogle, connectLocal, connectOpfs, hasVault, unlock, refreshVideos, logout,
   };
 });

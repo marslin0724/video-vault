@@ -33,7 +33,7 @@ async function connectOther(kind: 'gdrive' | 'local' | 'opfs') {
       const p = new GoogleDriveProvider(GoogleDriveProvider.tokenRequester(s.googleClientId()));
       await p.connect();
       other.value = p;
-      otherLabel.value = 'Google Drive';
+      otherLabel.value = `Google Drive · ${p.user}`;
     } else {
       other.value = await LocalFolderProvider.pick();
       otherLabel.value = '本機資料夾';

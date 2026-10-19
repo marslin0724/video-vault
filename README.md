@@ -72,6 +72,12 @@ ssh -L 5173:localhost:5173 <user>@<dev 機器 ip>
 2. Settings → Variables 新增 `GOOGLE_CLIENT_ID`（可省略，改在登入頁貼上）。
 3. push 到 `main` 即自動建置部署到 `https://<帳號>.github.io/<repo>/`。
 
+## 切換儲存帳號
+- 每個儲存帳號（例如不同的 Google 帳號）各有獨立的 vault，含各自的 keyring 與 passphrase。
+- 換帳號：右上角「登出」→ 重新「登入 Google Drive」。登入會強制跳出 Google 帳號選擇畫面，上方工具列會顯示目前連線的帳號 email。
+- 把影片搬到另一個帳號：登入 A → 工具頁「另一個儲存空間」選 Google Drive 並在選擇畫面挑帳號 B → 方向選「匯出」。B 若是空的會連 keyring 一起複製，之後用同一組 passphrase 開啟。B 若已有不同的 vault 會被拒絕，避免兩個 vault 混在一起。
+- 想離線搬：先匯出到本機資料夾，再登入另一個帳號匯入。
+
 ## 儲存版面
 ```
 video-vault/
