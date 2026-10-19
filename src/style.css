@@ -63,6 +63,12 @@ p { margin: 0; }
 .check { display: inline-flex; align-items: flex-start; gap: 8px; cursor: pointer; }
 .check input { margin-top: 3px; accent-color: var(--accent); }
 
+/* dialog header with close button */
+.dialog-head { display: flex; align-items: center; gap: 10px; }
+.dialog-head h2, .dialog-head h3 { flex: 1; }
+.close-x { display: inline-flex; align-items: center; justify-content: center; width: 36px; height: 36px; border: 0; border-radius: 50%; background: transparent; color: var(--text-2); cursor: pointer; }
+.close-x:hover { background: rgba(255, 255, 255, 0.12); color: var(--text); }
+
 /* layout */
 .topbar {
   display: flex; align-items: center; gap: 12px; height: 56px; padding: 0 20px;

@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref } from 'vue';
+import { useRouter } from 'vue-router';
 import { useSession } from '../stores/session';
 import { copyVault } from '../core/copy';
 import type { CopyProgress } from '../core/copy';
@@ -11,6 +12,7 @@ import { formatBytes } from './media';
 import Icon from './Icon.vue';
 
 const s = useSession();
+const router = useRouter();
 const other = ref<StorageProvider | null>(null);
 const otherLabel = ref('');
 const direction = ref<'export' | 'import'>('export');
@@ -66,7 +68,11 @@ async function run() {
 <template>
   <div class="page stack" style="max-width: 760px">
     <div class="card stack">
-      <div class="row"><Icon name="swap" :size="22" /><h2>複製 / 備份 / 匯入</h2></div>
+      <div class="dialog-head">
+        <Icon name="swap" :size="22" />
+        <h2>複製 / 備份 / 匯入</h2>
+        <button class="close-x" @click="router.push('/')" :disabled="busy" title="關閉"><Icon name="close" :size="20" /></button>
+      </div>
       <p class="muted">
         把 vault 的 keyring、index、meta 與 chunk 原封不動搬到另一個儲存空間，內容保持加密，只搬缺少的 chunk。
         兩邊必須是同一個 vault（相同 keyring）。

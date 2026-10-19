@@ -69,7 +69,11 @@ async function start() {
 <template>
   <div class="modal-backdrop" @click.self="!busy && emit('close')">
     <div class="card modal stack">
-      <div class="row"><Icon name="upload" :size="22" /><h3>上傳影片</h3></div>
+      <div class="dialog-head">
+        <Icon name="upload" :size="22" />
+        <h3>上傳影片</h3>
+        <button class="close-x" @click="emit('close')" :disabled="busy" title="關閉"><Icon name="close" :size="20" /></button>
+      </div>
       <label class="dropzone" :class="{ over }" @dragover.prevent="over = true" @dragleave="over = false" @drop.prevent="drop">
         <input type="file" accept="video/*,.mkv,.mov" multiple @change="pick" :disabled="busy" />
         <template v-if="files.length">

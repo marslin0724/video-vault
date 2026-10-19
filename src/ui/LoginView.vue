@@ -91,13 +91,16 @@ async function submit() {
       </template>
 
       <form v-else class="stack" @submit.prevent="submit">
-        <div class="row"><Icon name="lock" :size="20" /><h3>{{ creating ? '建立 vault' : '解鎖 vault' }}</h3></div>
+        <div class="dialog-head">
+          <Icon name="lock" :size="20" />
+          <h3>{{ creating ? '建立 vault' : '解鎖 vault' }}</h3>
+          <button class="close-x" type="button" @click="step = 'pick'" :disabled="busy" title="返回"><Icon name="close" :size="20" /></button>
+        </div>
         <p class="muted" v-if="creating">這個儲存空間還沒有 vault。設定一組 passphrase 來建立，遺失即無法解密，請妥善保存。</p>
         <p class="muted" v-else>輸入 passphrase 解鎖。</p>
         <input class="input" type="password" v-model="pass" placeholder="passphrase（至少 8 個字元）" autofocus />
         <input v-if="creating" class="input" type="password" v-model="pass2" placeholder="再輸入一次" />
         <button class="btn primary block" type="submit" :disabled="busy">{{ busy ? '處理中…' : creating ? '建立' : '解鎖' }}</button>
-        <button class="btn" type="button" @click="step = 'pick'" :disabled="busy">返回</button>
       </form>
 
       <p class="error" v-if="error">{{ error }}</p>

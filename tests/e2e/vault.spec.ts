@@ -34,7 +34,7 @@ async function upload(page: Page, file: string): Promise<string> {
   await page.getByRole('button', { name: '開始上傳' }).click();
   await expect(page.getByText('全部完成')).toBeVisible({ timeout: 90_000 });
   const line = await page.locator('.log li').last().innerText();
-  await page.getByRole('button', { name: '關閉' }).click();
+  await page.locator('.modal .close-x').click();
   return line;
 }
 
