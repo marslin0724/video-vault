@@ -68,6 +68,20 @@ async function run() {
 <template>
   <div class="page stack" style="max-width: 760px">
     <div class="card stack">
+      <div class="row"><Icon name="lock" :size="22" /><h2>安全</h2></div>
+      <label class="field">
+        <span>離開頁面後自動鎖定（切到背景或其他分頁時會先遮住畫面；超過此時間回來需重新輸入 passphrase）</span>
+        <select class="input" :value="s.lockDelayMs" @change="s.setLockDelay(Number(($event.target as HTMLSelectElement).value))">
+          <option :value="0">立即</option>
+          <option :value="60000">1 分鐘</option>
+          <option :value="300000">5 分鐘</option>
+          <option :value="-1">永不（只遮畫面，不鎖定）</option>
+        </select>
+      </label>
+      <button class="btn" @click="s.lock()"><Icon name="lock" :size="18" />立即鎖定</button>
+    </div>
+
+    <div class="card stack">
       <div class="dialog-head">
         <Icon name="swap" :size="22" />
         <h2>複製 / 備份 / 匯入</h2>

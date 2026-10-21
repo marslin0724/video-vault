@@ -2,6 +2,7 @@
 import { useRouter } from 'vue-router';
 import { useSession } from './stores/session';
 import Icon from './ui/Icon.vue';
+import LockScreen from './ui/LockScreen.vue';
 
 const s = useSession();
 const router = useRouter();
@@ -19,5 +20,7 @@ function logout() {
     <router-link to="/tools"><button class="btn"><Icon name="tools" :size="18" />工具</button></router-link>
     <button class="btn icon" @click="logout" title="登出"><Icon name="logout" :size="20" /></button>
   </header>
-  <router-view />
+  <!-- epoch changes on every unlock so views remount and reload what was dropped while locked -->
+  <router-view :key="s.epoch" />
+  <LockScreen v-if="s.shielded" />
 </template>

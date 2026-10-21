@@ -17,6 +17,6 @@ export const router = createRouter({
 
 router.beforeEach((to) => {
   const s = useSession();
-  if (to.path !== '/login' && !s.vault) return { path: '/login', query: { redirect: to.fullPath } };
+  if (to.path !== '/login' && !s.vault && !s.locked) return { path: '/login', query: { redirect: to.fullPath } };
   if (to.path === '/login' && s.vault) return '/';
 });

@@ -12,6 +12,10 @@ import type { SwSession } from '../sw/protocol';
 type Provider = GoogleDriveProvider | LocalFolderProvider | OpfsProvider;
 const CLIENT_ID_KEY = 'vv.googleClientId';
 const SESSION_KEY = 'vv.session';
+const LOCK_DELAY_KEY = 'vv.lockDelayMs';
+const IS_MOBILE = typeof navigator !== 'undefined' && /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+/** Mobile: lock the moment the page leaves the foreground; desktop: after 5 minutes away. */
+const DEFAULT_LOCK_DELAY_MS = IS_MOBILE ? 0 : 5 * 60_000;
 
 /** What survives a reload. The master key never does; the passphrase is asked again. */
 export type StoredSession =
@@ -36,6 +40,60 @@ export const useSession = defineStore('session', () => {
   const videos = ref<VideoMeta[]>([]);
   const loading = ref(false);
   const swReady = ref(false);
+  /** True while the page is hidden or waiting for the passphrase again. */
+  const shielded = ref(false);
+  const locked = ref(false);
+  /** Bumped on every unlock so views remount and reload their data. */
+  const epoch = ref(0);
+  const lockDelayMs = ref(Number(localStorage.getItem(LOCK_DELAY_KEY) ?? DEFAULT_LOCK_DELAY_MS));
+  let hiddenAt = 0;
+
+  function setLockDelay(ms: number) {
+    lockDelayMs.value = ms;
+    localStorage.setItem(LOCK_DELAY_KEY, String(ms));
+  }
+
+  /** Page left the foreground: cover the content now; decide about locking when it comes back. */
+  function onHidden() {
+    if (!vault.value || shielded.value) return;
+    shielded.value = true;
+    hiddenAt = Date.now();
+    document.querySelectorAll('video').forEach((v) => v.pause());
+    if (lockDelayMs.value === 0) lock();
+  }
+
+  function onVisible() {
+    if (!shielded.value) return;
+    if (!locked.value && lockDelayMs.value >= 0 && Date.now() - hiddenAt >= lockDelayMs.value) lock();
+    if (!locked.value) shielded.value = false;
+  }
+
+  /** Forget the master key and everything decrypted with it; the provider connection stays. */
+  function lock() {
+    if (!vault.value) return;
+    locked.value = true;
+    shielded.value = true;
+    vault.value = null;
+    videos.value = [];
+    bindSwSession(() => null, async () => null); // also clears the service worker's decrypted-chunk cache
+  }
+
+  async function unlockAgain(passphrase: string) {
+    if (!provider.value) throw new Error('not connected');
+    const v = await Vault.open(provider.value, passphrase);
+    vault.value = markRaw(v);
+    await ensureSw();
+    await refreshVideos();
+    locked.value = false;
+    shielded.value = false;
+    epoch.value++;
+  }
+
+  if (typeof document !== 'undefined') {
+    document.addEventListener('visibilitychange', () => (document.hidden ? onHidden() : onVisible()));
+    window.addEventListener('pagehide', onHidden);
+    window.addEventListener('pageshow', onVisible);
+  }
 
   const folders = computed(() => (vault.value ? vault.value.folders(videos.value) : []));
 
@@ -168,6 +226,8 @@ export const useSession = defineStore('session', () => {
   }
 
   function logout() {
+    locked.value = false;
+    shielded.value = false;
     vault.value = null;
     provider.value = null;
     videos.value = [];
@@ -178,6 +238,7 @@ export const useSession = defineStore('session', () => {
 
   return {
     provider, vault, videos, loading, providerLabel, folders,
+    shielded, locked, epoch, lockDelayMs, setLockDelay, lock, unlockAgain,
     googleClientId, setGoogleClientId, connectGoogle, connectLocal, connectOpfs, hasVault, unlock, refreshVideos, logout,
     storedSession, resume, resumeLocalWithPrompt,
   };

@@ -213,3 +213,46 @@ test('folders: create, upload into, move, breadcrumbs, delete empty', async ({ p
   await page.locator('.folder', { hasText: '2024' }).locator('.close-x').click();
   await expect(page.locator('.folder')).toHaveCount(0);
 });
+
+async function setVisibility(page: Page, hidden: boolean) {
+  await page.evaluate((h) => {
+    Object.defineProperty(document, 'hidden', { value: h, configurable: true });
+    Object.defineProperty(document, 'visibilityState', { value: h ? 'hidden' : 'visible', configurable: true });
+    document.dispatchEvent(new Event('visibilitychange'));
+  }, hidden);
+}
+
+test('leaving the page shields the content and asks for the passphrase on return', async ({ page }) => {
+  await login(page, 'store-lock', true);
+  await upload(page, SAMPLE2);
+  await page.goto('/#/tools');
+  await page.locator('select').first().selectOption('0'); // lock immediately
+  await page.goto('/#/');
+  await openFirstVideo(page, 'sample2');
+  await expectPlaying(page);
+
+  await setVisibility(page, true);
+  await expect(page.locator('.shield')).toBeVisible();
+  await expect(page.getByRole('heading', { name: '已鎖定' })).toBeVisible();
+  expect(await page.evaluate(() => document.querySelector('video')?.paused)).toBe(true);
+
+  await setVisibility(page, false);
+  await expect(page.locator('.shield')).toBeVisible(); // still locked until the passphrase is entered
+  await page.locator('.shield input[type=password]').fill('wrong-passphrase');
+  await page.locator('.shield button[type=submit]').click();
+  await expect(page.locator('.shield .error')).toHaveText('passphrase 錯誤');
+  await page.locator('.shield input[type=password]').fill(PASS);
+  await page.locator('.shield button[type=submit]').click();
+  await expect(page.locator('.shield')).toHaveCount(0);
+  await expect(page).toHaveURL(/#\/watch\//);
+  await expectPlaying(page);
+
+  // "never": only the shield, no passphrase
+  await page.goto('/#/tools');
+  await page.locator('select').first().selectOption('-1');
+  await setVisibility(page, true);
+  await expect(page.locator('.shield')).toBeVisible();
+  await expect(page.getByRole('heading', { name: '已鎖定' })).toHaveCount(0);
+  await setVisibility(page, false);
+  await expect(page.locator('.shield')).toHaveCount(0);
+});
