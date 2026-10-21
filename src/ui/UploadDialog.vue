@@ -1,10 +1,13 @@
 <script setup lang="ts">
-import { ref } from 'vue';
+import { markRaw, ref, shallowRef } from 'vue';
 import { useSession } from '../stores/session';
 import { remuxToFaststartMp4 } from '../core/remux';
 import type { UploadProgress } from '../core/vault';
 import { probeVideo, formatBytes } from './media';
+import type { DriveEntry, GoogleDriveProvider } from '../core/storage/gdrive';
+import { DRIVE_IMPORT_MAX_BYTES } from '../config';
 import Icon from './Icon.vue';
+import DriveBrowser from './DriveBrowser.vue';
 
 const props = defineProps<{ folder: string }>();
 const emit = defineEmits<{ close: [] }>();
@@ -17,6 +20,44 @@ const stage = ref('');
 const progress = ref<UploadProgress | null>(null);
 const log = ref<string[]>([]);
 const error = ref('');
+const drive = shallowRef<GoogleDriveProvider | null>(null); // class instance: keep it out of Vue's deep proxy
+const driveStage = ref('');
+
+/** Open the in-app Drive browser (asks for drive.readonly the first time). */
+async function openDrive() {
+  error.value = '';
+  busy.value = true;
+  try {
+    drive.value = markRaw(await s.driveForImport());
+  } catch (e) {
+    error.value = (e as Error).message;
+  } finally {
+    busy.value = false;
+  }
+}
+
+/** Download the chosen Drive videos into the queue as File objects. */
+async function addFromDrive(picked: DriveEntry[]) {
+  const d = drive.value!;
+  drive.value = null;
+  busy.value = true;
+  try {
+    for (const f of picked) {
+      if (f.size > DRIVE_IMPORT_MAX_BYTES) {
+        log.value.push(`${f.name}: 略過，超過 ${formatBytes(DRIVE_IMPORT_MAX_BYTES)}（從 Drive 匯入會先載入記憶體）`);
+        continue;
+      }
+      driveStage.value = `${f.name}: 從 Drive 下載中…`;
+      const blob = await d.download(f.id, (b) => (driveStage.value = `${f.name}: 從 Drive 下載 ${formatBytes(b)} / ${formatBytes(f.size)}`));
+      files.value = [...files.value, new File([blob], f.name, { type: f.mimeType })];
+    }
+    driveStage.value = `已加入 ${picked.length} 個 Drive 檔案，按「開始上傳」`;
+  } catch (e) {
+    error.value = (e as Error).message;
+  } finally {
+    busy.value = false;
+  }
+}
 
 function pick(e: Event) {
   files.value = Array.from((e.target as HTMLInputElement).files ?? []);
@@ -69,7 +110,8 @@ async function start() {
 </script>
 
 <template>
-  <div class="modal-backdrop" @click.self="!busy && emit('close')">
+  <DriveBrowser v-if="drive" :drive="drive" @close="drive = null" @pick="addFromDrive" />
+  <div class="modal-backdrop" v-else @click.self="!busy && emit('close')">
     <div class="card modal stack">
       <div class="dialog-head">
         <Icon name="upload" :size="22" />
@@ -83,6 +125,10 @@ async function start() {
         </template>
         <template v-else>拖曳影片到這裡，或點擊選擇檔案</template>
       </label>
+      <div class="row">
+        <button class="btn" @click="openDrive" :disabled="busy"><Icon name="drive" :size="18" />從 Google Drive 選擇</button>
+        <span class="muted" v-if="driveStage">{{ driveStage }}</span>
+      </div>
       <label class="check">
         <input type="checkbox" v-model="remux" :disabled="busy" />
         <span>上傳前 remux 成 faststart mp4<br /><span class="muted">不重新壓縮；起播較快，同一影片不同容器也能 dedup。1 GB 以上自動略過。</span></span>

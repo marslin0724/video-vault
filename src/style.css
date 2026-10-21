@@ -110,6 +110,14 @@ p { margin: 0; }
 .section-title { font-size: 13px; color: var(--text-2); text-transform: uppercase; letter-spacing: 0.06em; margin: 6px 0 -4px; }
 select.input { height: 36px; width: auto; min-width: 180px; }
 
+/* drive browser */
+.drive-row { display: flex; align-items: center; gap: 10px; padding: 8px 12px; cursor: pointer; border-bottom: 1px solid var(--border); }
+.drive-row:last-child { border-bottom: 0; }
+.drive-row:hover { background: var(--bg-hover); }
+.drive-row.on { background: rgba(62, 166, 255, 0.12); }
+.drive-row .name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.drive-row input { accent-color: var(--accent); }
+
 /* watch page */
 .watch { display: grid; grid-template-columns: minmax(0, 1fr) 380px; gap: 24px; align-items: start; }
 @media (max-width: 1100px) { .watch { grid-template-columns: 1fr; } }
