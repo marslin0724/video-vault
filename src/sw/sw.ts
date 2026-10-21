@@ -8,7 +8,7 @@ import type { VideoDescriptor } from '../core/vault';
 import { chunkOffsets, parseRange, spansFor } from './range';
 import { VIDEO_ROUTE } from './protocol';
 import type { PageToSw, SwSession, SwToPage } from './protocol';
-import { SW_CACHE_BYTES } from '../config';
+import { SW_CACHE_BYTES, SW_PREFETCH_AHEAD, SW_PREFETCH_PARALLEL } from '../config';
 
 declare const self: ServiceWorkerGlobalScope;
 
@@ -68,7 +68,7 @@ async function ensureVideo(id: string): Promise<VideoDescriptor> {
 }
 
 // ---- decrypted chunk cache (LRU by bytes) ----
-const cache = new Map<string, { p: Promise<Uint8Array>; size: number }>();
+const cache = new Map<string, { p: Promise<Uint8Array>; size: number; boost?: () => void }>();
 let cacheBytes = 0;
 
 function evict(hash: string) {
@@ -78,27 +78,38 @@ function evict(hash: string) {
   cacheBytes -= e.size;
 }
 
-function getChunk(hash: string, locator: string, size: number): Promise<Uint8Array> {
+/**
+ * Fetch + decrypt one chunk (deduped through the cache). Urgent fetches (needed for playback now)
+ * start immediately; prefetches wait for a slot so a burst of them cannot starve the urgent one.
+ */
+function getChunk(hash: string, locator: string, size: number, urgent = true): Promise<Uint8Array> {
   const hit = cache.get(hash);
   if (hit) {
     cache.delete(hash);
     cache.set(hash, hit); // refresh LRU order
+    if (urgent) hit.boost?.(); // a queued prefetch that playback now needs jumps the queue
     return hit.p;
   }
+  const slot = urgent ? null : acquirePrefetchSlot();
   const p = (async () => {
-    const s = await ensureSession();
-    let blob: Uint8Array;
+    if (slot) await slot.wait;
     try {
-      blob = await (await provider!).getByLocator(locator);
-    } catch (e) {
-      // token may have expired: ask the page for a fresh session once
-      if (!/401/.test(String(e))) throw e;
-      await ensureSession(true);
-      blob = await (await provider!).getByLocator(locator);
+      const s = await ensureSession();
+      let blob: Uint8Array;
+      try {
+        blob = await (await provider!).getByLocator(locator);
+      } catch (e) {
+        // token may have expired: ask the page for a fresh session once
+        if (!/401/.test(String(e))) throw e;
+        await ensureSession(true);
+        blob = await (await provider!).getByLocator(locator);
+      }
+      return await decryptBytes(s.key, blob);
+    } finally {
+      slot?.release();
     }
-    return decryptBytes(s.key, blob);
   })();
-  cache.set(hash, { p, size });
+  cache.set(hash, { p, size, boost: slot?.boost });
   cacheBytes += size;
   p.catch(() => evict(hash));
   for (const oldest of cache.keys()) {
@@ -106,6 +117,46 @@ function getChunk(hash: string, locator: string, size: number): Promise<Uint8Arr
     evict(oldest);
   }
   return p;
+}
+
+// ---- prefetch concurrency limiter (urgent fetches bypass it, and can boost a queued prefetch) ----
+let prefetchActive = 0;
+const prefetchWaiters: Array<() => void> = [];
+function acquirePrefetchSlot() {
+  let counted = false;
+  let done = false;
+  let resolve!: () => void;
+  const wait = new Promise<void>((r) => (resolve = r));
+  const grant = () => {
+    if (done) return;
+    done = counted = true;
+    prefetchActive++;
+    resolve();
+  };
+  if (prefetchActive < SW_PREFETCH_PARALLEL) grant();
+  else prefetchWaiters.push(grant);
+  return {
+    wait,
+    boost: () => {
+      if (done) return;
+      done = true;
+      const i = prefetchWaiters.indexOf(grant);
+      if (i >= 0) prefetchWaiters.splice(i, 1);
+      resolve();
+    },
+    release: () => {
+      if (!counted) return;
+      prefetchActive--;
+      prefetchWaiters.shift()?.();
+    },
+  };
+}
+
+function prefetchFrom(v: VideoDescriptor, index: number) {
+  for (let i = index; i < Math.min(v.chunks.length, index + SW_PREFETCH_AHEAD); i++) {
+    const c = v.chunks[i];
+    if (!cache.has(c.hash)) void getChunk(c.hash, c.locator, c.size, false).catch(() => {});
+  }
 }
 
 function streamVideo(v: VideoDescriptor, start: number, end: number): ReadableStream<Uint8Array> {
@@ -118,9 +169,9 @@ function streamVideo(v: VideoDescriptor, start: number, end: number): ReadableSt
       if (i >= spans.length) return controller.close();
       const span = spans[i++];
       const c = v.chunks[span.index];
-      const next = v.chunks[span.index + 1];
-      if (next) void getChunk(next.hash, next.locator, next.size).catch(() => {}); // prefetch
-      const data = await getChunk(c.hash, c.locator, c.size);
+      const current = getChunk(c.hash, c.locator, c.size, true);
+      prefetchFrom(v, span.index + 1);
+      const data = await current;
       controller.enqueue(data.subarray(span.start, span.end));
     },
   });

@@ -143,6 +143,7 @@ onBeforeUnmount(() => {
       ref="video"
       :src="props.src"
       autoplay
+      preload="auto"
       playsinline
       @click="togglePlay"
       @dblclick="toggleFullscreen"

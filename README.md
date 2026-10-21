@@ -5,7 +5,7 @@
 ## 功能
 - 三種儲存後端：Google Drive、本機資料夾（Chrome / Edge 桌面版）、瀏覽器內儲存（OPFS，iPhone 也可用）；以 passphrase 建立 / 解鎖 vault
 - 上傳：可選 remux 成 faststart mp4（ffmpeg.wasm，不重新壓縮）、chunk 去重、加密、並行上傳、進度
-- 瀏覽影片、縮圖、播放器（重複播放、速度、快捷鍵、全螢幕、子母畫面）
+- 瀏覽影片、縮圖、播放器（重複播放、速度、快捷鍵、全螢幕、子母畫面）；Service Worker 往前並行預抓 3 個 chunk，解密後快取 96 MiB，跳轉時急需的 chunk 優先
 - 虛擬資料夾：建立、巢狀、上傳到目前資料夾、從播放頁移動影片、刪除空資料夾。資料夾路徑存在影片 meta 的 `folder` 欄位，空資料夾清單存在 index，copy/export 不受影響
 - 下載原始影片（Chrome / Edge 直接串流寫入磁碟，其他瀏覽器經 Blob）、刪除影片並回收無人引用的 chunk
 - 工具頁：vault 在兩個儲存空間之間複製（備份 / 匯出 / 匯入），內容保持加密
