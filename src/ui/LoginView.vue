@@ -129,13 +129,16 @@ async function submit() {
           <Icon name="drive" :size="26" />
           <span><div class="name">登入 Google Drive</div><div class="desc">只會存取本程式建立的 video-vault 資料夾</div></span>
         </button>
-        <button class="provider" :disabled="busy || !localSupported" @click="connect('local')">
-          <Icon name="folder" :size="26" />
-          <span><div class="name">開啟本機資料夾</div><div class="desc">{{ localSupported ? '適合備份、匯入匯出' : '此瀏覽器不支援（需 Chrome / Edge 桌面版）' }}</div></span>
-        </button>
         <button class="provider" :disabled="busy || !opfsSupported" @click="connect('opfs')">
           <Icon name="folder" :size="26" />
-          <span><div class="name">瀏覽器內儲存</div><div class="desc">{{ opfsSupported ? `存在此瀏覽器裡，iPhone 也可用；${opfsInfo || '離線可播'}` : '此瀏覽器不支援' }}</div></span>
+          <span>
+            <div class="name">存在此裝置（瀏覽器內儲存）</div>
+            <div class="desc">{{ opfsSupported ? `影片存在這台裝置的瀏覽器儲存區，離線可播，iPhone 請選這個；${opfsInfo || ''}` : '此瀏覽器不支援，或處於私密瀏覽模式' }}</div>
+          </span>
+        </button>
+        <button v-if="localSupported" class="provider" :disabled="busy" @click="connect('local')">
+          <Icon name="folder" :size="26" />
+          <span><div class="name">開啟本機資料夾</div><div class="desc">選一個電腦上的資料夾，適合備份、匯入匯出（Chrome / Edge 桌面版）</div></span>
         </button>
       </template>
 

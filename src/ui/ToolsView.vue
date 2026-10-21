@@ -31,7 +31,7 @@ async function connectOther(kind: 'gdrive' | 'local' | 'opfs') {
       if (!name) return;
       if (s.provider instanceof OpfsProvider && s.provider.name === name) throw new Error('目前已經是這個瀏覽器內儲存');
       other.value = await OpfsProvider.open(name);
-      otherLabel.value = '瀏覽器內儲存';
+      otherLabel.value = '此裝置（瀏覽器內儲存）';
     } else if (kind === 'gdrive') {
       const p = new GoogleDriveProvider(GoogleDriveProvider.tokenRequester(s.googleClientId()));
       await p.connect();
@@ -81,8 +81,8 @@ async function run() {
         <span>另一個儲存空間</span>
         <div class="row">
           <button class="btn" @click="connectOther('gdrive')" :disabled="busy"><Icon name="drive" :size="18" />Google Drive</button>
-          <button class="btn" @click="connectOther('local')" :disabled="busy || !localSupported"><Icon name="folder" :size="18" />本機資料夾</button>
-          <button class="btn" @click="connectOther('opfs')" :disabled="busy || !OpfsProvider.isSupported()"><Icon name="folder" :size="18" />瀏覽器內儲存</button>
+          <button class="btn" @click="connectOther('opfs')" :disabled="busy || !OpfsProvider.isSupported()"><Icon name="folder" :size="18" />此裝置（瀏覽器內儲存）</button>
+          <button v-if="localSupported" class="btn" @click="connectOther('local')" :disabled="busy"><Icon name="folder" :size="18" />本機資料夾</button>
           <span class="chip" v-if="other"><Icon name="check" :size="14" />已連線：{{ otherLabel }}</span>
         </div>
       </div>

@@ -43,7 +43,7 @@ export const useSession = defineStore('session', () => {
     const p = provider.value;
     if (!p) return '';
     if (p.kind === 'gdrive') return p.user ? `Google Drive · ${p.user}` : 'Google Drive';
-    if (p instanceof OpfsProvider) return '瀏覽器內儲存';
+    if (p instanceof OpfsProvider) return '此裝置（瀏覽器內儲存）';
     return `本機資料夾 · ${p.root.name}`;
   });
 
