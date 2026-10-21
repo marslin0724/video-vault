@@ -71,9 +71,30 @@ ssh -L 5173:localhost:5173 <user>@<dev 機器 ip>
 測試模式下 Google 核發的授權 7 天後失效，到時重新登入即可，資料不受影響。若要免除這個限制，可把同意畫面「發布」為正式狀態；因為只用 `drive.file`（非敏感範圍）不需送審，登入時會多一個「未驗證的應用程式」警告，按「進階」→「前往 video-vault」即可。
 
 ## 部署到 GitHub Pages
-1. push 到 GitHub，repo Settings → Pages → Source 選 **GitHub Actions**。
-2. Settings → Variables 新增 `GOOGLE_CLIENT_ID`（可省略，改在登入頁貼上）。
-3. push 到 `main` 即自動建置部署到 `https://<帳號>.github.io/<repo>/`。
+部署後的網址是 `https://<帳號>.github.io/<repo>/`，不需要自訂網域，HTTPS 由 GitHub 提供。
+
+1. 在 https://github.com/new 建立 repo。免費帳號的 Pages 只支援 Public repo。
+2. 推送程式。GitHub 不接受密碼推送，用 SSH 金鑰或 Personal Access Token：
+   ```bash
+   # SSH：把 ~/.ssh/id_rsa.pub 內容貼到 https://github.com/settings/ssh/new
+   git remote add origin git@github.com:<帳號>/<repo>.git
+   git branch -M main
+   git push -u origin main
+   ```
+   用 HTTPS 的話，remote 改 `https://github.com/<帳號>/<repo>.git`，密碼欄填在 https://github.com/settings/tokens 建的 token（勾 `repo` 與 `workflow`）。
+3. repo Settings → Pages → Build and deployment → Source 選 **GitHub Actions**。Custom domain 留空。
+4. Google OAuth 的已授權 JavaScript 來源加 `https://<帳號>.github.io`（只到網域，不含路徑）。
+5. 選填：Settings → Secrets and variables → Actions → **Repository variables**（不是 Environment variables）→ New repository variable，Name `GOOGLE_CLIENT_ID`，Value 填 Client ID。這樣登入頁不用再貼。變數只在 build 時讀取，新增後要重跑一次 workflow 才生效。
+6. 到 Actions 分頁看「Deploy to GitHub Pages」：黃色進行中、綠勾完成、紅叉失敗，點進去可看 log。綠勾後 Settings → Pages 上方會顯示網址。
+
+之後每次 push 到 `main` 都會自動重新部署。
+
+### 部署常見錯誤
+| 錯誤 | 原因 | 處理 |
+|---|---|---|
+| deploy 步驟 `Failed to create deployment (status: 404) ... Ensure GitHub Pages has been enabled` | push 時 Pages 的 Source 還沒切到 GitHub Actions，或 repo 是 Private 而帳號是免費方案 | 到 Settings → Pages 選 GitHub Actions（必要時改 Public），再到該次 run 按 Re-run all jobs，不用重新 push |
+| `remote: Invalid username or token. Password authentication is not supported` | 用 GitHub 登入密碼推送 | 改用 SSH 金鑰或 token，見上方第 2 步 |
+| 登入頁沒有自動帶 Client ID | build 時沒有 `GOOGLE_CLIENT_ID` 變數，或新增變數後沒有重跑 | 加 Repository variable 後 Re-run；或直接在登入頁貼，瀏覽器會記住 |
 
 ## 切換儲存帳號
 - 不需要為新帳號重做 Google OAuth 設定。Client ID 屬於應用程式，不屬於帳號，所有帳號共用同一個。
