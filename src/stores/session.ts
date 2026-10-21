@@ -53,21 +53,6 @@ export const useSession = defineStore('session', () => {
   function setGoogleClientId(id: string) {
     localStorage.setItem(CLIENT_ID_KEY, id.trim());
   }
-  /**
-   * A Drive client able to read the user's own videos: the current provider after an incremental
-   * consent, or a separate Google login when the vault lives elsewhere (local folder / OPFS).
-   */
-  async function driveForImport(): Promise<GoogleDriveProvider> {
-    const p = provider.value;
-    if (p?.kind === 'gdrive') {
-      await p.ensureReadScope();
-      return p;
-    }
-    const id = googleClientId();
-    if (!id) throw new Error('Google Client ID is not set');
-    const t = await GoogleDriveProvider.tokenRequester(id)({ selectAccount: true, read: true });
-    return GoogleDriveProvider.fromReadToken(t.token);
-  }
 
   async function connectGoogle(opts: { hint?: string } = {}): Promise<Provider> {
     const id = googleClientId();
@@ -193,7 +178,7 @@ export const useSession = defineStore('session', () => {
 
   return {
     provider, vault, videos, loading, providerLabel, folders,
-    googleClientId, setGoogleClientId, driveForImport, connectGoogle, connectLocal, connectOpfs, hasVault, unlock, refreshVideos, logout,
+    googleClientId, setGoogleClientId, connectGoogle, connectLocal, connectOpfs, hasVault, unlock, refreshVideos, logout,
     storedSession, resume, resumeLocalWithPrompt,
   };
 });

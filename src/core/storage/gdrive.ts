@@ -4,27 +4,14 @@ import { VAULT_FOLDER_NAME } from '../../config';
 const API = 'https://www.googleapis.com/drive/v3';
 const UPLOAD = 'https://www.googleapis.com/upload/drive/v3';
 const SCOPE = 'https://www.googleapis.com/auth/drive.file';
-/** Needed only to browse the user's own videos for import; requested on demand, not at login. */
-const SCOPE_READ = 'https://www.googleapis.com/auth/drive.readonly';
 const FOLDER_MIME = 'application/vnd.google-apps.folder';
 
 export interface TokenInfo {
   token: string;
   expiresAt: number; // epoch ms
 }
-/**
- * `selectAccount` forces Google's account chooser; `hint` pre-selects an account for a silent refresh;
- * `read` also asks for drive.readonly (incremental consent, previously granted scopes are kept).
- */
-export type TokenRequester = (opts?: { selectAccount?: boolean; hint?: string; read?: boolean }) => Promise<TokenInfo>;
-
-export interface DriveEntry {
-  id: string;
-  name: string;
-  mimeType: string;
-  size: number;
-  isFolder: boolean;
-}
+/** `selectAccount` forces Google's account chooser; `hint` pre-selects an account for a silent refresh. */
+export type TokenRequester = (opts?: { selectAccount?: boolean; hint?: string }) => Promise<TokenInfo>;
 
 interface DriveFile {
   id: string;
@@ -44,7 +31,6 @@ export class GoogleDriveProvider implements StorageProvider {
   expiresAt = 0;
   /** Email of the signed-in Google account, filled by connect(). */
   user = '';
-  private hasReadScope = false;
 
   constructor(private requestToken: TokenRequester) {}
 
@@ -63,8 +49,7 @@ export class GoogleDriveProvider implements StorageProvider {
         if (!g?.accounts?.oauth2) return reject(new Error('Google Identity Services not loaded'));
         const client = g.accounts.oauth2.initTokenClient({
           client_id: clientId,
-          scope: opts?.read ? `${SCOPE} ${SCOPE_READ}` : SCOPE,
-          include_granted_scopes: true,
+          scope: SCOPE,
           callback: (resp: { access_token?: string; expires_in?: number; error?: string }) =>
             resp.access_token
               ? resolve({ token: resp.access_token, expiresAt: Date.now() + (resp.expires_in ?? 3600) * 1000 })
@@ -73,65 +58,6 @@ export class GoogleDriveProvider implements StorageProvider {
         });
         client.requestAccessToken({ prompt: opts?.selectAccount ? 'select_account' : '', hint: opts?.hint });
       });
-  }
-
-  /** Download any Drive file the token can read (e.g. one the user picked) with byte progress. */
-  static async downloadFile(token: string, id: string, onProgress?: (bytes: number) => void): Promise<Blob> {
-    const res = await fetch(`${API}/files/${id}?alt=media`, { headers: { Authorization: `Bearer ${token}` } });
-    if (!res.ok || !res.body) throw new Error(`Drive download ${res.status}: ${await res.text()}`);
-    let received = 0;
-    const counted = res.body.pipeThrough(
-      new TransformStream<Uint8Array, Uint8Array>({
-        transform(chunk, controller) {
-          received += chunk.length;
-          onProgress?.(received);
-          controller.enqueue(chunk);
-        },
-      }),
-    );
-    return new Response(counted).blob();
-  }
-
-  /** Ask for drive.readonly once (Google shows a consent screen only the first time). */
-  async ensureReadScope(): Promise<void> {
-    if (this.hasReadScope) return;
-    await this.refreshToken({ hint: this.user || undefined, read: true });
-    this.hasReadScope = true;
-  }
-
-  static fromReadToken(token: string): GoogleDriveProvider {
-    const p = GoogleDriveProvider.fromToken(token);
-    p.hasReadScope = true;
-    return p;
-  }
-
-  /** Folders and video files under `parent` ('root' for My Drive), folders first. Needs the read scope. */
-  async browse(parent: string): Promise<DriveEntry[]> {
-    const q = `'${parent}' in parents and trashed=false and (mimeType contains 'video/' or mimeType='${FOLDER_MIME}')`;
-    return this.listEntries(q);
-  }
-
-  /** Video files anywhere in the Drive whose name contains `text`. */
-  async searchVideos(text: string): Promise<DriveEntry[]> {
-    const safe = text.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
-    return this.listEntries(`name contains '${safe}' and trashed=false and mimeType contains 'video/'`);
-  }
-
-  private async listEntries(q: string): Promise<DriveEntry[]> {
-    const out: DriveEntry[] = [];
-    let pageToken = '';
-    do {
-      const url = `${API}/files?q=${encodeURIComponent(q)}&fields=nextPageToken,files(id,name,mimeType,size)&orderBy=folder,name&pageSize=200${pageToken ? `&pageToken=${pageToken}` : ''}`;
-      const page = (await (await this.fetch(url)).json()) as { files: (DriveFile & { mimeType: string })[]; nextPageToken?: string };
-      for (const f of page.files) out.push({ id: f.id, name: f.name, mimeType: f.mimeType, size: Number(f.size ?? 0), isFolder: f.mimeType === FOLDER_MIME });
-      pageToken = page.nextPageToken ?? '';
-    } while (pageToken);
-    return out;
-  }
-
-  /** Download any Drive file the token can read with byte progress (instance form of downloadFile). */
-  download(id: string, onProgress?: (bytes: number) => void): Promise<Blob> {
-    return GoogleDriveProvider.downloadFile(this.token, id, onProgress);
   }
 
   get accessToken(): string {

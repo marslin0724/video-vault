@@ -4,7 +4,7 @@
 
 ## 功能
 - 三種儲存後端：Google Drive、本機資料夾（Chrome / Edge 桌面版）、瀏覽器內儲存（OPFS，iPhone 也可用）；以 passphrase 建立 / 解鎖 vault
-- 上傳：本機檔案或從 Google Drive 選擇（Google Picker）；可選 remux 成 faststart mp4（ffmpeg.wasm，不重新壓縮）、chunk 去重、加密、並行上傳、進度
+- 上傳：可選 remux 成 faststart mp4（ffmpeg.wasm，不重新壓縮）、chunk 去重、加密、並行上傳、進度
 - 瀏覽影片、縮圖、播放器（重複播放、速度、快捷鍵、全螢幕、子母畫面）
 - 虛擬資料夾：建立、巢狀、上傳到目前資料夾、從播放頁移動影片、刪除空資料夾。資料夾路徑存在影片 meta 的 `folder` 欄位，空資料夾清單存在 index，copy/export 不受影響
 - 下載原始影片（Chrome / Edge 直接串流寫入磁碟，其他瀏覽器經 Blob）、刪除影片並回收無人引用的 chunk
@@ -49,11 +49,6 @@ VITE_GOOGLE_CLIENT_ID=xxxx.apps.googleusercontent.com npm run build
 GitHub Actions 會讀取 repository variable `GOOGLE_CLIENT_ID`。
 
 權限範圍只有 `drive.file`：程式只看得到自己建立的 `video-vault/` 資料夾。
-
-### 從 Google Drive 匯入影片
-上傳視窗的「從 Google Drive 選擇」會在程式內瀏覽你的雲端硬碟（資料夾、搜尋、多選），不需要額外設定。第一次使用時 Google 會多問一次同意，因為讀取你自己的檔案需要 `drive.readonly` 範圍；登入時只要求 `drive.file`。
-
-注意：`drive.readonly` 是 Google 的受限範圍。應用程式維持「測試中」狀態（測試使用者名單）可以直接用；若將來想「發布」成任何帳號都能登入，就必須通過 Google 的審核。選到的影片會先完整下載到瀏覽器記憶體再走一般上傳流程，單檔上限 2 GB；vault 不在 Drive 上時（本機資料夾、瀏覽器內儲存）會另外要求一次 Google 登入。
 
 ### 為什麼一定要用 localhost 或 HTTPS 網域
 - Service Worker 與 WebCrypto 只在 secure context 可用：`localhost` 或 `https://`。用 `http://<ip>:5173` 開頁面，解鎖與播放都會失敗。
